@@ -1,44 +1,38 @@
-name: Auto Merge Branches
+name: Auto Merge
 
 on:
   push:
     branches:
-      - 'profit_dep_hf_*'
+      - profit_dep_hf_*
 
 jobs:
-  merge_branches:
+  merge:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout repository
-      uses: actions/checkout@v3
-      with:
-        token: ${{ secrets.JEGANTOKEN1 }}  # Use PAT for checkout
+      - name: Checkout
+        uses: actions/checkout@v2
 
-    - name: Set up Git
-      run: |
-        git config user.name "GitHub Actions"
-        git config user.email "actions@github.com"
-        git config --global --add safe.directory /github/workspace
+      - name: Setup GitHub CLI
+        uses: actions/setup-gh@v2
+        with:
+          token: ${{ secrets.JEGANTOKEN1 }}
 
-    - name: Find and merge branches
-      run: |
-        # Fetch all branches
-        git fetch --all
+      - name: Find and merge branches
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
 
-        # Checkout the latest HF branch
-        HF_BRANCH=$(git branch -r | grep "origin/profit_dep_hf_" | sort -r | head -n 1 | sed 's|origin/||')
-        git checkout $HF_BRANCH
+          # Find the latest branch matching the hf prefix
+          HF_BRANCH=$(git branch -r | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's|origin/||')
+          MINOR_BRANCH=$(echo $HF_BRANCH | sed 's/hf_/minor_/')
+          MASTER_BRANCH="master"
 
-        # Perform the merge operation
-        git merge origin/profit_dep_minor_08162024 || {
-          echo "Conflict detected during merge from $HF_BRANCH to master";
-          git checkout -b temp_branch_hf_minor
-          git merge origin/profit_dep_minor_08162024
-          git push origin temp_branch_hf_minor
-          gh pr create --base master --head temp_branch_hf_minor --title "Resolve conflicts between $HF_BRANCH and master" --body "Conflicts detected. Please resolve conflicts."
-          exit 1
-        }
+          # Merge hf branch into minor branch
+          git checkout $MINOR_BRANCH
+          git merge $HF_BRANCH --no-ff
+          git push origin $MINOR_BRANCH
 
-        # Push the changes
-        git push origin $HF_BRANCH
+          # Merge minor branch into master branch
+          git checkout $MASTER_BRANCH
+          git merge $MINOR_BRANCH --no-ff
+          git push origin $MASTER_BRANCH
