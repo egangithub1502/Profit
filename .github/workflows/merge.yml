@@ -27,7 +27,7 @@ jobs:
 
       - name: Authenticate GitHub CLI
         run: |
-          echo "${{ secrets.JEGANTOKEN1 }}" | gh auth login --with-token
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Fetch All Branches
         run: |
@@ -38,10 +38,15 @@ jobs:
         run: |
           # Find the latest branch matching the hf prefix
           HF_BRANCH=$(git branch -r | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's|origin/||')
-          MINOR_BRANCH=$(echo $HF_BRANCH | sed 's/hf_/minor_/')
+          echo "Latest HF branch: $HF_BRANCH"
+
+          # Extract the date or unique identifier from HF_BRANCH
+          DATE_SUFFIX=$(echo $HF_BRANCH | sed 's/profit_dep_hf_//')
+
+          # Find the corresponding minor branch
+          MINOR_BRANCH=$(git branch -r | grep "origin/profit_dep_minor_${DATE_SUFFIX}" | sed 's|origin/||')
           MASTER_BRANCH="master"
 
-          echo "Latest HF branch: $HF_BRANCH"
           echo "Minor branch: $MINOR_BRANCH"
           echo "Master branch: $MASTER_BRANCH"
 
