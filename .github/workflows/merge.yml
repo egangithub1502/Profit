@@ -29,6 +29,10 @@ jobs:
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
+      - name: Fetch All Branches
+        run: |
+          git fetch --all
+
       - name: Find and Merge Branches
         run: |
           # Find the latest branch matching the hf prefix
@@ -36,8 +40,24 @@ jobs:
           MINOR_BRANCH=$(echo $HF_BRANCH | sed 's/hf_/minor_/')
           MASTER_BRANCH="master"
 
-          # Ensure branches are up to date
-          git fetch origin
+          echo "Latest HF branch: $HF_BRANCH"
+          echo "Minor branch: $MINOR_BRANCH"
+          echo "Master branch: $MASTER_BRANCH"
+
+          # Check if branches exist
+          if git show-ref --verify --quiet refs/heads/$MINOR_BRANCH; then
+            echo "$MINOR_BRANCH exists"
+          else
+            echo "$MINOR_BRANCH does not exist"
+            exit 1
+          fi
+
+          if git show-ref --verify --quiet refs/heads/$MASTER_BRANCH; then
+            echo "$MASTER_BRANCH exists"
+          else
+            echo "$MASTER_BRANCH does not exist"
+            exit 1
+          fi
 
           # Merge hf branch into minor branch
           git checkout $MINOR_BRANCH
