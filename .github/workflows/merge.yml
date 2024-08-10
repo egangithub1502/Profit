@@ -27,7 +27,7 @@ jobs:
 
       - name: Authenticate GitHub CLI
         run: |
-          echo "${{ secrets.JEGANTOKEN1 }}" | gh auth login --with-token
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
       - name: Fetch All Branches
         run: |
@@ -45,6 +45,10 @@ jobs:
           DATE_SUFFIX=$(echo $HF_BRANCH | sed 's/profit_dep_hf_//')
           echo "Date suffix extracted: $DATE_SUFFIX"
 
+          # Debug: Check all available branches
+          echo "Available branches:"
+          git branch -r
+
           # Find the corresponding minor branch
           MINOR_BRANCH=$(git branch -r | grep "origin/profit_dep_minor_${DATE_SUFFIX}" | sed 's|origin/||')
           echo "Minor branch: $MINOR_BRANCH"
@@ -52,14 +56,14 @@ jobs:
 
           # Check if branches exist
           if [ -z "$MINOR_BRANCH" ]; then
-            echo "$MINOR_BRANCH does not exist"
+            echo "Error: Minor branch does not exist"
             exit 1
           fi
 
           if git show-ref --verify --quiet refs/heads/master; then
             echo "Master branch exists"
           else
-            echo "Master branch does not exist"
+            echo "Error: Master branch does not exist"
             exit 1
           fi
 
