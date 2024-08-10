@@ -1,53 +1,72 @@
-name: Auto Merge
+name: Auto Merge Branches
 
 on:
-  pull_request:
-    types: [review_requested, reviewed]
+  push:
+    branches:
+      - 'profit_dep_hf_*'
 
 jobs:
-  auto-merge:
+  find_and_merge_branches:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v3
 
-    - name: Install GitHub CLI
+    - name: Set up Git
       run: |
-        sudo apt-get update
-        sudo apt-get install gh
-
-    - name: Authenticate GitHub CLI
-      run: echo "${{ secrets.RAJA }}" | gh auth login --with-token
-
-    - name: Wait for pull request approval and check assignment
-      id: wait_for_approval_and_check_assignment
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git config --global --add safe.directory /github/workspace
+    - name: Find latest HF and minor branches
+      id: find_branches
       run: |
-        pr_number=${{ github.event.pull_request.number }}
-        target_user="egangithub1502"
-        timeout=600  # Time to wait in seconds (10 minutes)
-        interval=10  # Interval between checks in seconds
-        elapsed=0
-
-        while [ $elapsed -lt $timeout ]; do
-          review_status=$(gh pr view $pr_number --json reviews --jq '.reviews[] | select(.state == "APPROVED")' || echo "")
-          assignees=$(gh pr view $pr_number --json assignees --jq '.assignees[].login' || echo "")
-
-          if [ -n "$review_status" ] && echo "$assignees" | grep -q "$target_user"; then
-            echo "Pull request has been approved and assigned to $target_user."
-            exit 0
-          fi
-
-          echo "Waiting for approval and assignment..."
-          sleep $interval
-          elapsed=$((elapsed + interval))
-        done
-
-        echo "Timeout reached. No approval or incorrect assignment."
-        exit 1
-
-    - name: Merge pull request
-      if: success()
+        # Find the latest HF branch
+        HF_BRANCH=$(git branch -r | grep "origin/profit_dep_hf_" | sort -r | head -n 1 | sed 's|origin/||')
+        echo "HF_BRANCH=$HF_BRANCH" >> $GITHUB_ENV
+        # Find the latest minor branch
+        MINOR_BRANCH=$(git branch -r | grep "origin/profit_dep_minor_" | sort -r | head -n 1 | sed 's|origin/||')
+        echo "MINOR_BRANCH=$MINOR_BRANCH" >> $GITHUB_ENV
+    - name: Merge HF into minor
       run: |
-        pr_number=${{ github.event.pull_request.number }}
-        gh pr merge $pr_number --merge --admin
+        git checkout ${{ env.MINOR_BRANCH }}
+        git merge ${{ env.HF_BRANCH }} || {
+          echo "Conflict detected during merge from ${{ env.HF_BRANCH }} to ${{ env.MINOR_BRANCH }}";
+          git checkout -b temp_branch_hf_minor
+          git merge ${{ env.HF_BRANCH }}
+          echo "Creating pull request to resolve conflicts";
+          gh pr create --base ${{ env.MINOR_BRANCH }} --head temp_branch_hf_minor --title "Resolve conflicts between ${{ env.HF_BRANCH }} and ${{ env.MINOR_BRANCH }}" --body "Conflicts detected. Please resolve conflicts."
+          exit 1
+        }
+        git push origin ${{ env.MINOR_BRANCH }}
+  merge_minor_to_master:
+    needs: find_and_merge_branches
+    runs-on: ubuntu-latest
+    if: success() # Proceed only if the previous job succeeded
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Fetch and checkout master branch
+      run: |
+        # Fetch all branches including master
+        git fetch origin master:master
+        # Checkout the master branch
+        git checkout master
+    - name: Set up Git
+      run: |
+        git config user.name "GitHub Actions"
+        git config user.email "actions@github.com"
+        git config --global --add safe.directory /github/workspace
+    - name: Merge minor into master
+      run: |
+        git merge ${{ env.MINOR_BRANCH }} || {
+          echo "Conflict detected during merge from ${{ env.MINOR_BRANCH }} to master";
+          git checkout -b temp_branch_minor_master
+          git merge ${{ env.MINOR_BRANCH }}
+          echo "Creating pull request to resolve conflicts";
+          gh pr create --base master --head temp_branch_minor_master --title "Resolve conflicts between ${{ env.MINOR_BRANCH }} and master" --body "Conflicts detected. Please resolve conflicts."
+          exit 1
+        }
+        git push origin master
