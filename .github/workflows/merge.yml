@@ -32,6 +32,7 @@ jobs:
       - name: Fetch All Branches
         run: |
           git fetch --all
+          echo "Available branches:"
           git branch -r  # Debug: List all remote branches
 
       - name: Find and Merge Branches
@@ -48,6 +49,10 @@ jobs:
           # Debug: Check all available branches
           echo "Available branches:"
           git branch -r
+
+          # Debug: List minor branches specifically
+          echo "Minor branches:"
+          git branch -r | grep 'origin/profit_dep_minor_'
 
           # Find the corresponding minor branch
           MINOR_BRANCH=$(git branch -r | grep "origin/profit_dep_minor_${DATE_SUFFIX}" | sed 's|origin/||')
