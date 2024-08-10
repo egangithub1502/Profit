@@ -33,38 +33,38 @@ jobs:
         run: |
           git fetch --all
 
-      - name: Find and Merge Branches
+      - name: Find Latest Branches
+        id: find-branches
         run: |
           # Find the latest branch matching the hf prefix
           HF_BRANCH=$(git branch -r | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's|origin/||')
           MINOR_BRANCH=$(echo $HF_BRANCH | sed 's/hf_/minor_/')
           MASTER_BRANCH="master"
 
-          echo "Latest HF branch: $HF_BRANCH"
-          echo "Minor branch: $MINOR_BRANCH"
-          echo "Master branch: $MASTER_BRANCH"
+          echo "HF_BRANCH=$HF_BRANCH" >> $GITHUB_ENV
+          echo "MINOR_BRANCH=$MINOR_BRANCH" >> $GITHUB_ENV
+          echo "MASTER_BRANCH=$MASTER_BRANCH" >> $GITHUB_ENV
 
-          # Check if branches exist
-          if git show-ref --verify --quiet refs/heads/$MINOR_BRANCH; then
-            echo "$MINOR_BRANCH exists"
+      - name: Check Branches Existence and Create if Needed
+        run: |
+          # Check if MINOR_BRANCH exists, create it if not
+          if ! git show-ref --verify --quiet refs/heads/${{ env.MINOR_BRANCH }}; then
+            echo "Branch ${{ env.MINOR_BRANCH }} does not exist. Creating it from ${{ env.MASTER_BRANCH }}."
+            git checkout ${{ env.MASTER_BRANCH }}
+            git checkout -b ${{ env.MINOR_BRANCH }}
+            git push origin ${{ env.MINOR_BRANCH }}
           else
-            echo "$MINOR_BRANCH does not exist"
-            exit 1
+            echo "Branch ${{ env.MINOR_BRANCH }} exists."
           fi
 
-          if git show-ref --verify --quiet refs/heads/$MASTER_BRANCH; then
-            echo "$MASTER_BRANCH exists"
-          else
-            echo "$MASTER_BRANCH does not exist"
-            exit 1
-          fi
+      - name: Merge hf branch into minor branch
+        run: |
+          git checkout ${{ env.MINOR_BRANCH }}
+          git merge ${{ env.HF_BRANCH }} --no-ff -m "Merge ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}"
+          git push origin ${{ env.MINOR_BRANCH }}
 
-          # Merge hf branch into minor branch
-          git checkout $MINOR_BRANCH
-          git merge $HF_BRANCH --no-ff -m "Merge $HF_BRANCH into $MINOR_BRANCH"
-          git push origin $MINOR_BRANCH
-
-          # Merge minor branch into master branch
-          git checkout $MASTER_BRANCH
-          git merge $MINOR_BRANCH --no-ff -m "Merge $MINOR_BRANCH into $MASTER_BRANCH"
-          git push origin $MASTER_BRANCH
+      - name: Merge minor branch into master branch
+        run: |
+          git checkout ${{ env.MASTER_BRANCH }}
+          git merge ${{ env.MINOR_BRANCH }} --no-ff -m "Merge ${{ env.MINOR_BRANCH }} into ${{ env.MASTER_BRANCH }}"
+          git push origin ${{ env.MASTER_BRANCH }}
