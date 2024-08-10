@@ -7,21 +7,24 @@ on:
 
 jobs:
   merge:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # Explicitly specifying the runner image version
+
     steps:
-      - name: Checkout
+      - name: Checkout Code
         uses: actions/checkout@v2
 
-      - name: Setup GitHub CLI
+      - name: Set Up GitHub CLI
         uses: actions/setup-gh@v2
         with:
           token: ${{ secrets.JEGANTOKEN1 }}
 
-      - name: Find and merge branches
+      - name: Configure Git
         run: |
           git config user.name "GitHub Actions"
           git config user.email "actions@github.com"
 
+      - name: Find and Merge Branches
+        run: |
           # Find the latest branch matching the hf prefix
           HF_BRANCH=$(git branch -r | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's|origin/||')
           MINOR_BRANCH=$(echo $HF_BRANCH | sed 's/hf_/minor_/')
@@ -29,10 +32,10 @@ jobs:
 
           # Merge hf branch into minor branch
           git checkout $MINOR_BRANCH
-          git merge $HF_BRANCH --no-ff
+          git merge $HF_BRANCH --no-ff -m "Merge $HF_BRANCH into $MINOR_BRANCH"
           git push origin $MINOR_BRANCH
 
           # Merge minor branch into master branch
           git checkout $MASTER_BRANCH
-          git merge $MINOR_BRANCH --no-ff
+          git merge $MINOR_BRANCH --no-ff -m "Merge $MINOR_BRANCH into $MASTER_BRANCH"
           git push origin $MASTER_BRANCH
