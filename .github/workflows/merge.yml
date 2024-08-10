@@ -50,14 +50,13 @@ jobs:
           echo "Available branches:"
           git branch -r
 
-          # Debug: List minor branches specifically
-          echo "Minor branches:"
-          git branch -r | grep 'origin/profit_dep_minor_'
+          # Debug: Check specific minor branch match
+          echo "Matching minor branches:"
+          git branch -r | grep "origin/profit_dep_minor_${DATE_SUFFIX}"
 
           # Find the corresponding minor branch
           MINOR_BRANCH=$(git branch -r | grep "origin/profit_dep_minor_${DATE_SUFFIX}" | sed 's|origin/||')
           echo "Minor branch: $MINOR_BRANCH"
-          echo "Master branch: master"
 
           # Check if branches exist
           if [ -z "$MINOR_BRANCH" ]; then
