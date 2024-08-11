@@ -20,46 +20,36 @@ jobs:
           git config --global user.name 'egangithub1502'
           git config --global user.email '2010177071b@gmail.com'
 
-      - name: Extract branch names
-        id: extract-branch-names
+      - name: Fetch and Identify Latest Branches
+        id: fetch_branches
         run: |
-          BRANCH_NAME=${GITHUB_REF#refs/heads/}
-          BRANCH_PREFIX=${BRANCH_NAME%_*}
-          BRANCH_SUFFIX=${BRANCH_NAME##*_}
-
-          # Fetch branches with prefixes and extract latest branches
           git fetch --all
-          HF_BRANCH=$(git branch -r | grep "origin/${BRANCH_PREFIX}hf_" | sort -r | head -n 1 | sed 's/origin\///')
-          MINOR_BRANCH=$(git branch -r | grep "origin/${BRANCH_PREFIX}minor_" | sort -r | head -n 1 | sed 's/origin\///')
 
-          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
-          echo "BRANCH_PREFIX=$BRANCH_PREFIX" >> $GITHUB_ENV
-          echo "BRANCH_SUFFIX=$BRANCH_SUFFIX" >> $GITHUB_ENV
-          echo "MINOR_BRANCH=$MINOR_BRANCH" >> $GITHUB_ENV
-          echo "HF_BRANCH=$HF_BRANCH" >> $GITHUB_ENV
+          hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
+          minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
 
-          # Debugging output
-          echo "Debug: BRANCH_NAME=$BRANCH_NAME"
-          echo "Debug: BRANCH_PREFIX=$BRANCH_PREFIX"
-          echo "Debug: BRANCH_SUFFIX=$BRANCH_SUFFIX"
-          echo "Debug: MINOR_BRANCH=$MINOR_BRANCH"
-          echo "Debug: HF_BRANCH=$HF_BRANCH"
+          echo "HF branch: $hf_branch"
+          echo "Minor branch: $minor_branch"
+
+          echo "HF_BRANCH=$hf_branch" >> $GITHUB_ENV
+          echo "MINOR_BRANCH=$minor_branch" >> $GITHUB_ENV
+
+      - name: Debug Branch Names
+        run: |
+          echo "HF Branch: ${{ env.HF_BRANCH }}"
+          echo "Minor Branch: ${{ env.MINOR_BRANCH }}"
 
       - name: Attempt to merge HF into minor
-        if: contains(env.BRANCH_NAME, 'hf')
+        if: contains(env.HF_BRANCH, 'profit_dep_hf_') && contains(env.MINOR_BRANCH, 'profit_dep_minor_')
         id: merge_hf_to_minor
         run: |
-          if [ -z "${{ env.HF_BRANCH }}" ] || [ -z "${{ env.MINOR_BRANCH }}" ]; then
-            echo "Error: Could not determine HF or MINOR branch"
-            exit 1
-          fi
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
           git merge origin/${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin ${{ env.MINOR_BRANCH }}
 
       - name: Handle conflict between HF and minor
-        if: failure() && contains(env.BRANCH_NAME, 'hf')
+        if: failure() && contains(env.HF_BRANCH, 'profit_dep_hf_')
         run: |
           git checkout -b temp/hf-to-minor-conflict
           git push origin temp/hf-to-minor-conflict
@@ -69,20 +59,16 @@ jobs:
           }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
 
       - name: Attempt to merge minor into master
-        if: contains(env.BRANCH_NAME, 'minor') || (contains(env.BRANCH_NAME, 'hf') && success())
+        if: contains(env.MINOR_BRANCH, 'profit_dep_minor_') || (contains(env.HF_BRANCH, 'profit_dep_hf_') && success())
         id: merge_minor_to_master
         run: |
-          if [ -z "${{ env.MINOR_BRANCH }}" ]; then
-            echo "Error: Could not determine MINOR branch"
-            exit 1
-          fi
           git fetch origin
           git checkout master
           git merge origin/${{ env.MINOR_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin master
 
       - name: Handle conflict between minor and master
-        if: failure() && (contains(env.BRANCH_NAME, 'minor') || (contains(env.BRANCH_NAME, 'hf') && success()))
+        if: failure() && (contains(env.MINOR_BRANCH, 'profit_dep_minor_') || (contains(env.HF_BRANCH, 'profit_dep_hf_') && success()))
         run: |
           git checkout -b temp/minor-to-master-conflict
           git push origin temp/minor-to-master-conflict
