@@ -20,15 +20,30 @@ jobs:
           git config --global user.name 'egangithub1502'
           git config --global user.email '2010177071b@gmail.com'
 
+      - name: Fetch and Identify Latest Branches
+        id: fetch_branches
+        run: |
+          # Fetch all branches
+          git fetch --all
+
+          # List branches with specific prefixes and sort by date
+          hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
+          minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
+          
+          echo "HF branch: $hf_branch"
+          echo "Minor branch: $minor_branch"
+
+          echo "HF_BRANCH=$hf_branch" >> $GITHUB_ENV
+          echo "MINOR_BRANCH=$minor_branch" >> $GITHUB_ENV
+
       - name: Attempt to merge HF into minor
         if: github.ref == 'refs/heads/HF'
         id: merge_hf_to_minor
         run: |
           git fetch origin
-          git checkout minor
-          git merge origin/HF
-          echo "Merge HF into minor completed with exit code $?"
-          git push origin minor
+          git checkout ${{ env.MINOR_BRANCH }}
+          git merge origin/${{ env.HF_BRANCH }} || exit 1
+          git push origin ${{ env.MINOR_BRANCH }}
 
       - name: Handle conflict between HF and minor
         if: failure() && github.ref == 'refs/heads/HF'
@@ -37,7 +52,7 @@ jobs:
           git push origin temp/hf-to-minor-conflict
           # Send conflict notification to Google Chat
           curl -X POST -H 'Content-Type: application/json' -d '{
-            "text": "Merge conflict detected while merging HF into minor. A temporary branch (temp/hf-to-minor-conflict) has been created for manual resolution. Conflicting files:\n\n$(git diff --name-only HEAD^1 HEAD)"
+            "text": "Merge conflict detected while merging ${env.HF_BRANCH} into ${env.MINOR_BRANCH}. A temporary branch (temp/hf-to-minor-conflict) has been created for manual resolution. Conflicting files:\n\n'$(git diff --name-only HEAD^1 HEAD)'"
           }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
 
       - name: Attempt to merge minor into master
@@ -46,8 +61,7 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge origin/minor
-          echo "Merge minor into master completed with exit code $?"
+          git merge origin/${{ env.MINOR_BRANCH }} || exit 1
           git push origin master
 
       - name: Handle conflict between minor and master
@@ -57,5 +71,5 @@ jobs:
           git push origin temp/minor-to-master-conflict
           # Send conflict notification to Google Chat
           curl -X POST -H 'Content-Type: application/json' -d '{
-            "text": "Merge conflict detected while merging minor into master. A temporary branch (temp/minor-to-master-conflict) has been created for manual resolution. Conflicting files:\n\n$(git diff --name-only HEAD^1 HEAD)"
+            "text": "Merge conflict detected while merging ${env.MINOR_BRANCH} into master. A temporary branch (temp/minor-to-master-conflict) has been created for manual resolution. Conflicting files:\n\n'$(git diff --name-only HEAD^1 HEAD)'"
           }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
