@@ -3,8 +3,8 @@ name: Sync branches with conflict handling
 on: 
   push:
     branches:
-      - HF
-      - minor
+      - profit_dep_hf_
+      - profit_dep_minor_
 
 jobs: 
   branch-sync:
