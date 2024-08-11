@@ -35,6 +35,7 @@ jobs:
           echo "HF Branch: ${{ env.HF_BRANCH }}"
           echo "Minor Branch: ${{ env.MINOR_BRANCH }}"
           git branch -a
+          git log --oneline --graph --decorate --all
 
       - name: Attempt to merge HF into minor
         if: github.ref == 'refs/heads/${{ env.HF_BRANCH }}'
@@ -46,6 +47,7 @@ jobs:
           git merge ${{ env.HF_BRANCH }} --no-commit || {
             echo "Merge failed with exit code $?."
             git status
+            git log --oneline --graph --decorate
             exit 1
           }
           git commit -m "Merged ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}" || true
@@ -64,6 +66,7 @@ jobs:
           else
             echo "Merge failed but not due to conflicts."
             git status
+            git log --oneline --graph --decorate
             exit 1
           fi
 
@@ -77,6 +80,7 @@ jobs:
           git merge ${{ env.MINOR_BRANCH }} --no-commit || {
             echo "Merge failed with exit code $?."
             git status
+            git log --oneline --graph --decorate
             exit 1
           }
           git commit -m "Merged ${{ env.MINOR_BRANCH }} into master" || true
@@ -95,5 +99,6 @@ jobs:
           else
             echo "Merge failed but not due to conflicts."
             git status
+            git log --oneline --graph --decorate
             exit 1
           fi
