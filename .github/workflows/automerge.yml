@@ -23,13 +23,10 @@ jobs:
         id: fetch_branches
         run: |
           git fetch --all
-
           hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
           minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
-
           echo "HF branch: $hf_branch"
           echo "Minor branch: $minor_branch"
-
           echo "HF_BRANCH=$hf_branch" >> $GITHUB_ENV
           echo "MINOR_BRANCH=$minor_branch" >> $GITHUB_ENV
 
@@ -44,11 +41,10 @@ jobs:
         run: |
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
-          git merge origin/${{ env.HF_BRANCH }} --no-commit || exit 1
-          if [ $? -ne 0 ]; then
+          git merge origin/${{ env.HF_BRANCH }} --no-commit || {
             echo "Merge failed or has conflicts."
             exit 1
-          fi
+          }
           git commit -m "Merged ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}" || true
           git push origin ${{ env.MINOR_BRANCH }}
 
@@ -72,11 +68,10 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge origin/${{ env.MINOR_BRANCH }} --no-commit || exit 1
-          if [ $? -ne 0 ]; then
+          git merge origin/${{ env.MINOR_BRANCH }} --no-commit || {
             echo "Merge failed or has conflicts."
             exit 1
-          fi
+          }
           git commit -m "Merged ${{ env.MINOR_BRANCH }} into master" || true
           git push origin master
 
