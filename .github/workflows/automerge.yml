@@ -1,9 +1,9 @@
-name: Sync branches in sequence (HF -> minor -> master)
+name: Sync HF to minor, then minor to master
 
 on: 
   push:
     branches:
-      - master
+      - HF
 
 jobs: 
   branch-sync:
