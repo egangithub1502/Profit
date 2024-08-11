@@ -26,7 +26,17 @@ jobs:
         run: |
           git fetch origin
           git checkout minor
-          git merge origin/HF || echo "Conflict detected" && exit 1
+          git merge origin/HF
+          echo "Merge HF into minor completed with exit code $?"
+          git push origin minor
+
+      - name: Debug after HF to minor merge
+        if: github.ref == 'refs/heads/HF'
+        run: |
+          git status
+          git log --oneline -n 10
+          git diff --name-status HEAD^
+          git branch -a
 
       - name: Handle conflict between HF and minor
         if: failure() && github.ref == 'refs/heads/HF'
@@ -40,7 +50,17 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge origin/minor || echo "Conflict detected" && exit 1
+          git merge origin/minor
+          echo "Merge minor into master completed with exit code $?"
+          git push origin master
+
+      - name: Debug after minor to master merge
+        if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
+        run: |
+          git status
+          git log --oneline -n 10
+          git diff --name-status HEAD^
+          git branch -a
 
       - name: Handle conflict between minor and master
         if: failure() && (github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success()))
