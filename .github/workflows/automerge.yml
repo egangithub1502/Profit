@@ -1,12 +1,12 @@
 name: Sync branches with conflict handling
 
-on: 
+on:
   push:
     branches:
-      - profit_dep_hf_
-      - profit_dep_minor_
+      - profit_dep_hf_*
+      - profit_dep_minor_*
 
-jobs: 
+jobs:
   branch-sync:
     runs-on: ubuntu-latest
     steps:
@@ -19,16 +19,27 @@ jobs:
         run: |
           git config --global user.name 'egangithub1502'
           git config --global user.email '2010177071b@gmail.com'
+
+      - name: Extract branch names
+        id: extract-branch-names
+        run: |
+          echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
+          echo "BRANCH_PREFIX=${BRANCH_NAME%_*}" >> $GITHUB_ENV
+          echo "BRANCH_SUFFIX=${BRANCH_NAME##*_}" >> $GITHUB_ENV
+          echo "MINOR_BRANCH=${BRANCH_PREFIX}_minor_${BRANCH_SUFFIX}" >> $GITHUB_ENV
+          echo "HF_BRANCH=${BRANCH_PREFIX}_hf_${BRANCH_SUFFIX}" >> $GITHUB_ENV
+
       - name: Attempt to merge HF into minor
-        if: github.ref == 'refs/heads/HF'
+        if: contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf')
         id: merge_hf_to_minor
         run: |
           git fetch origin
-          git checkout minor
-          git merge origin/HF || echo "Merge conflict detected" && exit 1
-          git push origin minor
+          git checkout ${{ env.MINOR_BRANCH }}
+          git merge origin/${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
+          git push origin ${{ env.MINOR_BRANCH }}
+
       - name: Handle conflict between HF and minor
-        if: failure() && github.ref == 'refs/heads/HF'
+        if: failure() && contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf')
         run: |
           git checkout -b temp/hf-to-minor-conflict
           git push origin temp/hf-to-minor-conflict
@@ -36,16 +47,18 @@ jobs:
           curl -X POST -H 'Content-Type: application/json' -d '{
             "text": "Merge conflict detected while merging HF into minor. A temporary branch (temp/hf-to-minor-conflict) has been created for manual resolution. Conflicting files:\n\n'$(git diff --name-only HEAD^1 HEAD)'"
           }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+
       - name: Attempt to merge minor into master
-        if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
+        if: contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'minor') || (contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf') && success())
         id: merge_minor_to_master
         run: |
           git fetch origin
           git checkout master
-          git merge origin/minor || echo "Merge conflict detected" && exit 1
+          git merge origin/${{ env.MINOR_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin master
+
       - name: Handle conflict between minor and master
-        if: failure() && (github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success()))
+        if: failure() && (contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'minor') || (contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf') && success()))
         run: |
           git checkout -b temp/minor-to-master-conflict
           git push origin temp/minor-to-master-conflict
