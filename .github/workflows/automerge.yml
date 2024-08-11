@@ -8,6 +8,7 @@ on:
 jobs:
   branch-sync:
     runs-on: ubuntu-latest
+    if: github.ref != 'refs/heads/master'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -139,5 +140,4 @@ jobs:
       - name: Notify Google Chat on Failure
         if: failure()
         run: |
-          # The detailed conflict message is sent above, so this step is no longer necessary
           echo "Failure notification is not needed; detailed conflict messages are already sent."
