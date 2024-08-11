@@ -75,10 +75,11 @@ jobs:
               echo "Merge conflict detected."
               conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              message="Merge conflict detected when merging HF into minor. Conflicting files:\n$conflict_files\nLast committer: $committer"
+              temp_branch="temp/hf-to-minor-conflict"
+              git checkout -b "$temp_branch"
+              git push origin "$temp_branch"
+              message="Merge conflict detected when merging HF into minor.\nConflicting files:\n$conflict_files\nLast committer: $committer\nTemporary branch created: $temp_branch"
               echo "$message"
-              git checkout -b "temp/hf-to-minor-conflict"
-              git push origin "temp/hf-to-minor-conflict"
               curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               exit 1
             fi
@@ -93,10 +94,11 @@ jobs:
               echo "Merge conflict detected."
               conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              message="Merge conflict detected when merging minor into master. Conflicting files:\n$conflict_files\nLast committer: $committer"
+              temp_branch="temp/minor-to-master-conflict"
+              git checkout -b "$temp_branch"
+              git push origin "$temp_branch"
+              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer\nTemporary branch created: $temp_branch"
               echo "$message"
-              git checkout -b "temp/minor-to-master-conflict"
-              git push origin "temp/minor-to-master-conflict"
               curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               exit 1
             fi
@@ -117,10 +119,11 @@ jobs:
               echo "Merge conflict detected."
               conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              message="Merge conflict detected when merging minor into master. Conflicting files:\n$conflict_files\nLast committer: $committer"
+              temp_branch="temp/minor-to-master-conflict"
+              git checkout -b "$temp_branch"
+              git push origin "$temp_branch"
+              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer\nTemporary branch created: $temp_branch"
               echo "$message"
-              git checkout -b "temp/minor-to-master-conflict"
-              git push origin "temp/minor-to-master-conflict"
               curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               exit 1
             fi
