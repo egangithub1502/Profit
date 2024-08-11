@@ -1,29 +1,34 @@
-name: Sync master to develop
+name: Sync branches in sequence (HF -> minor -> master)
 
 on: 
   push:
-   branches:
-    - master
+    branches:
+      - master
 
 jobs: 
   branch-sync:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: action/checkout@v4
+        uses: actions/checkout@v4
         with:
-         fetch-depth: 0
+          fetch-depth: 0
 
       - name: Set up git
         run: |
-          git config --global user.name 'egan'
-          git config --global user.email '2010177071b@gmail.com'        
-      - name: push changes to develop when master is updated
-        if: github.ref == 'refs/heads/master'
+          git config --global user.name 'egangithub1502'
+          git config --global user.email '2010177071b@gmail.com'
+
+      - name: Sync HF into minor
         run: |
           git fetch origin
-          git checkout develop
-          git merge master
-          git push origin develop
+          git checkout minor
+          git merge origin/HF
+          git push origin minor
 
-
+      - name: Sync minor into master
+        run: |
+          git fetch origin
+          git checkout master
+          git merge origin/minor
+          git push origin master
