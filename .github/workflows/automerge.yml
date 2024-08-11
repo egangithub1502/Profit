@@ -26,8 +26,13 @@ jobs:
         run: |
           git fetch origin
           git checkout minor
-          git merge origin/HF
+          git merge --no-commit --no-ff origin/HF || true
           echo "Merge HF into minor completed with exit code $?"
+          if [ $? -ne 0 ]; then
+            echo "Merge conflict detected."
+            exit 1
+          fi
+          git commit -m "Merge HF into minor"
           git push origin minor
 
       - name: Debug after HF to minor merge
@@ -43,6 +48,7 @@ jobs:
         run: |
           git checkout -b temp/hf-to-minor-conflict
           git push origin temp/hf-to-minor-conflict
+          echo "Conflict branch created: temp/hf-to-minor-conflict"
 
       - name: Attempt to merge minor into master
         if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
@@ -50,8 +56,13 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge origin/minor
+          git merge --no-commit --no-ff origin/minor || true
           echo "Merge minor into master completed with exit code $?"
+          if [ $? -ne 0 ]; then
+            echo "Merge conflict detected."
+            exit 1
+          fi
+          git commit -m "Merge minor into master"
           git push origin master
 
       - name: Debug after minor to master merge
@@ -67,3 +78,4 @@ jobs:
         run: |
           git checkout -b temp/minor-to-master-conflict
           git push origin temp/minor-to-master-conflict
+          echo "Conflict branch created: temp/minor-to-master-conflict"
