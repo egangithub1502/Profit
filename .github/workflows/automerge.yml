@@ -1,0 +1,49 @@
+name: Sync branches with conflict handling
+
+on: 
+  push:
+    branches:
+      - HF
+      - minor
+
+jobs: 
+  branch-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up git
+        run: |
+          git config --global user.name 'egangithub1502'
+          git config --global user.email '2010177071b@gmail.com'
+
+      - name: Attempt to merge HF into minor
+        if: github.ref == 'refs/heads/HF'
+        id: merge_hf_to_minor
+        run: |
+          git fetch origin
+          git checkout minor
+          git merge origin/HF || echo "Conflict detected" && exit 1
+
+      - name: Handle conflict between HF and minor
+        if: failure() && github.ref == 'refs/heads/HF'
+        run: |
+          git checkout -b temp/hf-to-minor-conflict
+          git push origin temp/hf-to-minor-conflict
+
+      - name: Attempt to merge minor into master
+        if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
+        id: merge_minor_to_master
+        run: |
+          git fetch origin
+          git checkout master
+          git merge origin/minor || echo "Conflict detected" && exit 1
+
+      - name: Handle conflict between minor and master
+        if: failure() && (github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success()))
+        run: |
+          git checkout -b temp/minor-to-master-conflict
+          git push origin temp/minor-to-master-conflict
