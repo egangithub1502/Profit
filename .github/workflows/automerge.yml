@@ -76,8 +76,25 @@ jobs:
             git commit -m "Merge $latest_minor_branch into master"
             git push origin master
           elif [ "$BRANCH_TYPE" == "minor" ]; then
-            # Handle minor branch syncs separately if needed
             echo "Processing minor branch only."
+            
+            # Get the latest minor branch
+            latest_minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
+            echo "Latest minor branch: $latest_minor_branch"
+            
+            # Attempt to merge minor into master
+            git fetch origin
+            git checkout master
+            git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
+            if [ $? -ne 0 ]; then
+              echo "Merge conflict detected."
+              git checkout -b "temp/minor-to-master-conflict"
+              git push origin "temp/minor-to-master-conflict"
+              echo "Conflict branch created: temp/minor-to-master-conflict"
+              exit 1
+            fi
+            git commit -m "Merge $latest_minor_branch into master"
+            git push origin master
           fi
 
       - name: Notify Google Chat on Success
