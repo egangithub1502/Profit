@@ -26,9 +26,12 @@ jobs:
           BRANCH_NAME=${GITHUB_REF#refs/heads/}
           BRANCH_PREFIX=${BRANCH_NAME%_*}
           BRANCH_SUFFIX=${BRANCH_NAME##*_}
-          MINOR_BRANCH="${BRANCH_PREFIX}_minor_${BRANCH_SUFFIX}"
-          HF_BRANCH="${BRANCH_PREFIX}_hf_${BRANCH_SUFFIX}"
-          
+
+          # Fetch branches with prefixes and extract latest branches
+          git fetch --all
+          HF_BRANCH=$(git branch -r | grep "origin/${BRANCH_PREFIX}hf_" | sort -r | head -n 1 | sed 's/origin\///')
+          MINOR_BRANCH=$(git branch -r | grep "origin/${BRANCH_PREFIX}minor_" | sort -r | head -n 1 | sed 's/origin\///')
+
           echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
           echo "BRANCH_PREFIX=$BRANCH_PREFIX" >> $GITHUB_ENV
           echo "BRANCH_SUFFIX=$BRANCH_SUFFIX" >> $GITHUB_ENV
@@ -43,16 +46,20 @@ jobs:
           echo "Debug: HF_BRANCH=$HF_BRANCH"
 
       - name: Attempt to merge HF into minor
-        if: contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf')
+        if: contains(env.BRANCH_NAME, 'hf')
         id: merge_hf_to_minor
         run: |
+          if [ -z "${{ env.HF_BRANCH }}" ] || [ -z "${{ env.MINOR_BRANCH }}" ]; then
+            echo "Error: Could not determine HF or MINOR branch"
+            exit 1
+          fi
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
           git merge origin/${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin ${{ env.MINOR_BRANCH }}
 
       - name: Handle conflict between HF and minor
-        if: failure() && contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf')
+        if: failure() && contains(env.BRANCH_NAME, 'hf')
         run: |
           git checkout -b temp/hf-to-minor-conflict
           git push origin temp/hf-to-minor-conflict
@@ -62,16 +69,20 @@ jobs:
           }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
 
       - name: Attempt to merge minor into master
-        if: contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'minor') || (contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf') && success())
+        if: contains(env.BRANCH_NAME, 'minor') || (contains(env.BRANCH_NAME, 'hf') && success())
         id: merge_minor_to_master
         run: |
+          if [ -z "${{ env.MINOR_BRANCH }}" ]; then
+            echo "Error: Could not determine MINOR branch"
+            exit 1
+          fi
           git fetch origin
           git checkout master
           git merge origin/${{ env.MINOR_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin master
 
       - name: Handle conflict between minor and master
-        if: failure() && (contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'minor') || (contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf') && success()))
+        if: failure() && (contains(env.BRANCH_NAME, 'minor') || (contains(env.BRANCH_NAME, 'hf') && success()))
         run: |
           git checkout -b temp/minor-to-master-conflict
           git push origin temp/minor-to-master-conflict
