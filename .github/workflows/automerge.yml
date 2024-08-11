@@ -50,7 +50,7 @@ jobs:
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
           git fetch origin ${{ env.HF_BRANCH }}
-          git merge origin/${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
+          git merge ${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin ${{ env.MINOR_BRANCH }}
 
       - name: Handle conflict between HF and minor
