@@ -23,11 +23,24 @@ jobs:
       - name: Extract branch names
         id: extract-branch-names
         run: |
-          echo "BRANCH_NAME=$(echo ${GITHUB_REF#refs/heads/})" >> $GITHUB_ENV
-          echo "BRANCH_PREFIX=${BRANCH_NAME%_*}" >> $GITHUB_ENV
-          echo "BRANCH_SUFFIX=${BRANCH_NAME##*_}" >> $GITHUB_ENV
-          echo "MINOR_BRANCH=${BRANCH_PREFIX}_minor_${BRANCH_SUFFIX}" >> $GITHUB_ENV
-          echo "HF_BRANCH=${BRANCH_PREFIX}_hf_${BRANCH_SUFFIX}" >> $GITHUB_ENV
+          BRANCH_NAME=${GITHUB_REF#refs/heads/}
+          BRANCH_PREFIX=${BRANCH_NAME%_*}
+          BRANCH_SUFFIX=${BRANCH_NAME##*_}
+          MINOR_BRANCH="${BRANCH_PREFIX}_minor_${BRANCH_SUFFIX}"
+          HF_BRANCH="${BRANCH_PREFIX}_hf_${BRANCH_SUFFIX}"
+          
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+          echo "BRANCH_PREFIX=$BRANCH_PREFIX" >> $GITHUB_ENV
+          echo "BRANCH_SUFFIX=$BRANCH_SUFFIX" >> $GITHUB_ENV
+          echo "MINOR_BRANCH=$MINOR_BRANCH" >> $GITHUB_ENV
+          echo "HF_BRANCH=$HF_BRANCH" >> $GITHUB_ENV
+
+          # Debugging output
+          echo "Debug: BRANCH_NAME=$BRANCH_NAME"
+          echo "Debug: BRANCH_PREFIX=$BRANCH_PREFIX"
+          echo "Debug: BRANCH_SUFFIX=$BRANCH_SUFFIX"
+          echo "Debug: MINOR_BRANCH=$MINOR_BRANCH"
+          echo "Debug: HF_BRANCH=$HF_BRANCH"
 
       - name: Attempt to merge HF into minor
         if: contains(steps.extract-branch-names.outputs.BRANCH_NAME, 'hf')
