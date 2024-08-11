@@ -49,7 +49,7 @@ jobs:
         run: |
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
-          git merge origin/${{ env.HF_BRANCH }} || exit 1
+          git merge ${{ env.HF_BRANCH }} || exit 1
           git push origin ${{ env.MINOR_BRANCH }}
 
       - name: Handle conflict between HF and minor
@@ -68,7 +68,7 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge origin/${{ env.MINOR_BRANCH }} || exit 1
+          git merge ${{ env.MINOR_BRANCH }} || exit 1
           git push origin master
 
       - name: Handle conflict between minor and master
