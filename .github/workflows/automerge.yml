@@ -44,7 +44,8 @@ jobs:
           git checkout ${{ env.MINOR_BRANCH }}
           echo "Merging ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}"
           git merge ${{ env.HF_BRANCH }} --no-commit || {
-            echo "Merge failed or has conflicts."
+            echo "Merge failed with exit code $?."
+            git status
             exit 1
           }
           git commit -m "Merged ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}" || true
@@ -53,6 +54,7 @@ jobs:
       - name: Handle conflict between HF and minor
         if: failure() && github.ref == 'refs/heads/${{ env.HF_BRANCH }}'
         run: |
+          echo "Checking for conflicts..."
           if git ls-files -u | grep -q '^'; then
             git checkout -b temp/hf-to-minor-conflict
             git push origin temp/hf-to-minor-conflict
@@ -61,6 +63,7 @@ jobs:
             }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
           else
             echo "Merge failed but not due to conflicts."
+            git status
             exit 1
           fi
 
@@ -72,7 +75,8 @@ jobs:
           git checkout master
           echo "Merging ${{ env.MINOR_BRANCH }} into master"
           git merge ${{ env.MINOR_BRANCH }} --no-commit || {
-            echo "Merge failed or has conflicts."
+            echo "Merge failed with exit code $?."
+            git status
             exit 1
           }
           git commit -m "Merged ${{ env.MINOR_BRANCH }} into master" || true
@@ -81,6 +85,7 @@ jobs:
       - name: Handle conflict between minor and master
         if: failure() && (github.ref == 'refs/heads/${{ env.MINOR_BRANCH }}' || (github.ref == 'refs/heads/${{ env.HF_BRANCH }}' && success()))
         run: |
+          echo "Checking for conflicts..."
           if git ls-files -u | grep -q '^'; then
             git checkout -b temp/minor-to-master-conflict
             git push origin temp/minor-to-master-conflict
@@ -89,5 +94,6 @@ jobs:
             }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
           else
             echo "Merge failed but not due to conflicts."
+            git status
             exit 1
           fi
