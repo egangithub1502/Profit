@@ -1,82 +1,27 @@
-name: Auto Merge
+name: Sync master to develop
 
-on:
+on: 
   push:
-    branches:
-      - profit_dep_hf_*
+   branches:
+    - minor
 
-jobs:
-  merge:
-    runs-on: ubuntu-22.04  # Specifies the runner image version
-
+jobs: 
+  branch-sync:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout Code
-        uses: actions/checkout@v2
+      - name: Checkout code
+        uses: action/checkout@v4
         with:
-          fetch-depth: 0  # Fetches all history for branches and tags
+         fetch-depth: 0
 
-      - name: Install GitHub CLI
+      - name: Set up git
         run: |
-          sudo apt update
-          sudo apt install -y gh
-
-      - name: Configure Git
+          git config --global user.name 'egan'
+          git config --global user.email '2010177071b@gmail.com'        
+      - name: push changes to develop when master is updated
+        if: github.ref == 'refs/heads/master'
         run: |
-          git config user.name "GitHub Actions"
-          git config user.email "actions@github.com"
-
-      - name: Authenticate GitHub CLI
-        run: |
-          echo "${{ secrets.JEGANRAJA1 }}" | gh auth login --with-token
-
-      - name: Fetch All Branches
-        run: |
-          git fetch --all
-          echo "Available branches:"
-          git branch -r  # Debug: List all remote branches
-
-      - name: Debug Branch References
-        run: |
-          echo "Checking master branch reference"
-          git branch -a  # Debug: List all branches including local and remote
-          git show-ref --heads master || echo "Master branch not found"  # Debug: Show references for master
-
-      - name: Find and Merge Branches
-        id: find-branches
-        run: |
-          # Find the latest branch matching the hf prefix
-          HF_BRANCH=$(git branch -r | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's|origin/||')
-          echo "Latest HF branch: $HF_BRANCH"
-
-          # Find the latest minor branch
-          MINOR_BRANCH=$(git branch -r | grep 'origin/profit_dep_minor_' | sort -V | tail -n 1 | sed 's|origin/||')
-          echo "Latest Minor branch: $MINOR_BRANCH"
-          echo "Master branch: master"
-
-          # Check if branches exist
-          if [ -z "$MINOR_BRANCH" ]; then
-            echo "Error: Minor branch does not exist"
-            exit 1
-          fi
-
-          # Ensure master branch is checked out
-          git fetch origin master
-          git checkout master || (echo "Error: Master branch does not exist" && exit 1)
-
-          # Check if master branch exists
-          if git show-ref --verify --quiet refs/heads/master; then
-            echo "Master branch exists"
-          else
-            echo "Error: Master branch does not exist"
-            exit 1
-          fi
-
-          # Merge hf branch into minor branch
-          git checkout $MINOR_BRANCH
-          git merge $HF_BRANCH --no-ff -m "Merge $HF_BRANCH into $MINOR_BRANCH"
-          git push origin $MINOR_BRANCH
-
-          # Merge minor branch into master branch
-          git checkout master
-          git merge $MINOR_BRANCH --no-ff -m "Merge $MINOR_BRANCH into master"
-          git push origin master
+          git fetch origin
+          git checkout develop
+          git merge master
+          git push origin develop
