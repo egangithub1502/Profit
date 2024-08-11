@@ -73,9 +73,9 @@ jobs:
             git merge --no-commit --no-ff "origin/$latest_hf_branch" || true
             if [ $? -ne 0 ]; then
               echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U)
+              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              message="Merge conflict detected when merging HF into minor. Conflicting files: $conflict_files. Last committer: $committer"
+              message="Merge conflict detected when merging HF into minor. Conflicting files:\n$conflict_files\nLast committer: $committer"
               echo "$message"
               git checkout -b "temp/hf-to-minor-conflict"
               git push origin "temp/hf-to-minor-conflict"
@@ -91,9 +91,9 @@ jobs:
             git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
             if [ $? -ne 0 ]; then
               echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U)
+              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              message="Merge conflict detected when merging minor into master. Conflicting files: $conflict_files. Last committer: $committer"
+              message="Merge conflict detected when merging minor into master. Conflicting files:\n$conflict_files\nLast committer: $committer"
               echo "$message"
               git checkout -b "temp/minor-to-master-conflict"
               git push origin "temp/minor-to-master-conflict"
@@ -115,9 +115,9 @@ jobs:
             git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
             if [ $? -ne 0 ]; then
               echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U)
+              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              message="Merge conflict detected when merging minor into master. Conflicting files: $conflict_files. Last committer: $committer"
+              message="Merge conflict detected when merging minor into master. Conflicting files:\n$conflict_files\nLast committer: $committer"
               echo "$message"
               git checkout -b "temp/minor-to-master-conflict"
               git push origin "temp/minor-to-master-conflict"
