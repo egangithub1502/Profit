@@ -41,11 +41,11 @@ jobs:
           
           if [ "$BRANCH_TYPE" == "hf" ]; then
             # Get the latest HF branch
-            latest_hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
+            latest_hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
             echo "Latest HF branch: $latest_hf_branch"
             
             # Get the latest minor branch
-            latest_minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
+            latest_minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
             echo "Latest minor branch: $latest_minor_branch"
 
             # Merge HF into minor
