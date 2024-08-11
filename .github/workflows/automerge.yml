@@ -44,13 +44,12 @@ jobs:
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
           echo "Merging ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}"
-          git merge ${{ env.HF_BRANCH }} --no-commit || {
+          git merge ${{ env.HF_BRANCH }} || {
             echo "Merge failed with exit code $?."
             git status
             git log --oneline --graph --decorate
             exit 1
           }
-          git commit -m "Merged ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}" || true
           git push origin ${{ env.MINOR_BRANCH }}
 
       - name: Handle conflict between HF and minor
@@ -77,13 +76,12 @@ jobs:
           git fetch origin
           git checkout master
           echo "Merging ${{ env.MINOR_BRANCH }} into master"
-          git merge ${{ env.MINOR_BRANCH }} --no-commit || {
+          git merge ${{ env.MINOR_BRANCH }} || {
             echo "Merge failed with exit code $?."
             git status
             git log --oneline --graph --decorate
             exit 1
           }
-          git commit -m "Merged ${{ env.MINOR_BRANCH }} into master" || true
           git push origin master
 
       - name: Handle conflict between minor and master
