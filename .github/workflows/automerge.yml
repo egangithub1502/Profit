@@ -1,11 +1,11 @@
 name: Sync branches with conflict handling
 
-on: 
+on:
   push:
     branches:
       - '*'
 
-jobs: 
+jobs:
   branch-sync:
     runs-on: ubuntu-latest
     steps:
@@ -19,7 +19,26 @@ jobs:
           git config --global user.name 'egangithub1502'
           git config --global user.email '2010177071b@gmail.com'
 
+      - name: Check if direct commit to master
+        id: check_direct_commit
+        run: |
+          branch_name="${GITHUB_REF#refs/heads/}"
+          
+          if [ "$branch_name" == "master" ]; then
+            echo "Direct commit to master detected."
+            echo "DIRECT_COMMIT=true" >> $GITHUB_ENV
+          else
+            echo "DIRECT_COMMIT=false" >> $GITHUB_ENV
+          fi
+
+      - name: Notify Google Chat on Direct Commit
+        if: env.DIRECT_COMMIT == 'true'
+        run: |
+          curl -X POST -H 'Content-Type: application/json' --data '{"text": "Direct commit detected on the master branch."}' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+        continue-on-error: true
+
       - name: Sync branches
+        if: env.DIRECT_COMMIT == 'false'
         run: |
           # Extract branch name from the reference
           branch_name="${GITHUB_REF#refs/heads/}"
@@ -47,7 +66,6 @@ jobs:
             # Get the latest minor branch
             latest_minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
             echo "Latest minor branch: $latest_minor_branch"
-
             # Merge HF into minor
             git fetch origin
             git checkout "$latest_minor_branch"
@@ -76,8 +94,25 @@ jobs:
             git commit -m "Merge $latest_minor_branch into master"
             git push origin master
           elif [ "$BRANCH_TYPE" == "minor" ]; then
-            # Handle minor branch syncs separately if needed
             echo "Processing minor branch only."
+            
+            # Get the latest minor branch
+            latest_minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
+            echo "Latest minor branch: $latest_minor_branch"
+            
+            # Attempt to merge minor into master
+            git fetch origin
+            git checkout master
+            git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
+            if [ $? -ne 0 ]; then
+              echo "Merge conflict detected."
+              git checkout -b "temp/minor-to-master-conflict"
+              git push origin "temp/minor-to-master-conflict"
+              echo "Conflict branch created: temp/minor-to-master-conflict"
+              exit 1
+            fi
+            git commit -m "Merge $latest_minor_branch into master"
+            git push origin master
           fi
 
       - name: Notify Google Chat on Success
