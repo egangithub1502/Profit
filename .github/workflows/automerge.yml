@@ -49,7 +49,7 @@ jobs:
         run: |
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
-          git merge origin/${{ env.HF_BRANCH }} --no-commit || exit 1
+          git merge ${{ env.HF_BRANCH }} --no-commit || exit 1
           if [ $? -ne 0 ]; then
             echo "Merge failed with exit code $?"
             exit 1
