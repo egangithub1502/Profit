@@ -73,13 +73,13 @@ jobs:
             git merge --no-commit --no-ff "origin/$latest_hf_branch" || true
             if [ $? -ne 0 ]; then
               echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U)
+              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              echo "Conflicting files: $conflict_files"
-              echo "Committer: $committer"
+              message="Merge conflict detected when merging HF into minor. Conflicting files:\n$conflict_files\nLast committer: $committer"
+              echo "$message"
               git checkout -b "temp/hf-to-minor-conflict"
               git push origin "temp/hf-to-minor-conflict"
-              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"Merge conflict detected when merging HF into minor. Conflicting files: $conflict_files. Committer: $committer\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               exit 1
             fi
             git commit -m "Merge $latest_hf_branch into $latest_minor_branch"
@@ -91,13 +91,13 @@ jobs:
             git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
             if [ $? -ne 0 ]; then
               echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U)
+              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              echo "Conflicting files: $conflict_files"
-              echo "Committer: $committer"
+              message="Merge conflict detected when merging minor into master. Conflicting files:\n$conflict_files\nLast committer: $committer"
+              echo "$message"
               git checkout -b "temp/minor-to-master-conflict"
               git push origin "temp/minor-to-master-conflict"
-              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"Merge conflict detected when merging minor into master. Conflicting files: $conflict_files. Committer: $committer\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               exit 1
             fi
             git commit -m "Merge $latest_minor_branch into master"
@@ -115,13 +115,13 @@ jobs:
             git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
             if [ $? -ne 0 ]; then
               echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U)
+              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              echo "Conflicting files: $conflict_files"
-              echo "Committer: $committer"
+              message="Merge conflict detected when merging minor into master. Conflicting files:\n$conflict_files\nLast committer: $committer"
+              echo "$message"
               git checkout -b "temp/minor-to-master-conflict"
               git push origin "temp/minor-to-master-conflict"
-              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"Merge conflict detected when merging minor into master. Conflicting files: $conflict_files. Committer: $committer\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               exit 1
             fi
             git commit -m "Merge $latest_minor_branch into master"
@@ -136,4 +136,5 @@ jobs:
       - name: Notify Google Chat on Failure
         if: failure()
         run: |
-          curl -X POST -H 'Content-Type: application/json' --data '{"text": "Sync branches job failed."}' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+          # The detailed conflict message is sent above, so this step is no longer necessary
+          echo "Failure notification is not needed; detailed conflict messages are already sent."
