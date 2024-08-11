@@ -26,29 +26,19 @@ jobs:
         run: |
           git fetch origin
           git checkout minor
-          git merge --no-commit --no-ff origin/HF || true
+          git merge origin/HF
           echo "Merge HF into minor completed with exit code $?"
-          if [ $? -ne 0 ]; then
-            echo "Merge conflict detected."
-            exit 1
-          fi
-          git commit -m "Merge HF into minor"
           git push origin minor
-
-      - name: Debug after HF to minor merge
-        if: github.ref == 'refs/heads/HF'
-        run: |
-          git status
-          git log --oneline -n 10
-          git diff --name-status HEAD^
-          git branch -a
 
       - name: Handle conflict between HF and minor
         if: failure() && github.ref == 'refs/heads/HF'
         run: |
           git checkout -b temp/hf-to-minor-conflict
           git push origin temp/hf-to-minor-conflict
-          echo "Conflict branch created: temp/hf-to-minor-conflict"
+          # Send conflict notification to Google Chat
+          curl -X POST -H 'Content-Type: application/json' -d '{
+            "text": "Merge conflict detected while merging HF into minor. A temporary branch (temp/hf-to-minor-conflict) has been created for manual resolution. Conflicting files:\n\n$(git diff --name-only HEAD^1 HEAD)"
+          }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
 
       - name: Attempt to merge minor into master
         if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
@@ -56,26 +46,16 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge --no-commit --no-ff origin/minor || true
+          git merge origin/minor
           echo "Merge minor into master completed with exit code $?"
-          if [ $? -ne 0 ]; then
-            echo "Merge conflict detected."
-            exit 1
-          fi
-          git commit -m "Merge minor into master"
           git push origin master
-
-      - name: Debug after minor to master merge
-        if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
-        run: |
-          git status
-          git log --oneline -n 10
-          git diff --name-status HEAD^
-          git branch -a
 
       - name: Handle conflict between minor and master
         if: failure() && (github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success()))
         run: |
           git checkout -b temp/minor-to-master-conflict
           git push origin temp/minor-to-master-conflict
-          echo "Conflict branch created: temp/minor-to-master-conflict"
+          # Send conflict notification to Google Chat
+          curl -X POST -H 'Content-Type: application/json' -d '{
+            "text": "Merge conflict detected while merging minor into master. A temporary branch (temp/minor-to-master-conflict) has been created for manual resolution. Conflicting files:\n\n$(git diff --name-only HEAD^1 HEAD)"
+          }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
