@@ -34,6 +34,7 @@ jobs:
         run: |
           echo "HF Branch: ${{ env.HF_BRANCH }}"
           echo "Minor Branch: ${{ env.MINOR_BRANCH }}"
+          git branch -a
 
       - name: Attempt to merge HF into minor
         if: github.ref == 'refs/heads/${{ env.HF_BRANCH }}'
@@ -41,7 +42,8 @@ jobs:
         run: |
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
-          git merge origin/${{ env.HF_BRANCH }} --no-commit || {
+          echo "Merging ${{ env.HF_BRANCH }} into ${{ env.MINOR_BRANCH }}"
+          git merge ${{ env.HF_BRANCH }} --no-commit || {
             echo "Merge failed or has conflicts."
             exit 1
           }
@@ -68,7 +70,8 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge origin/${{ env.MINOR_BRANCH }} --no-commit || {
+          echo "Merging ${{ env.MINOR_BRANCH }} into master"
+          git merge ${{ env.MINOR_BRANCH }} --no-commit || {
             echo "Merge failed or has conflicts."
             exit 1
           }
