@@ -23,18 +23,22 @@ jobs:
       - name: Fetch and Identify Latest Branches
         id: fetch_branches
         run: |
-          # Fetch all branches
           git fetch --all
-
-          # List branches with specific prefixes and sort by date
+          git branch -r
+          
           hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
           minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
-          
+
           echo "HF branch: $hf_branch"
           echo "Minor branch: $minor_branch"
 
           echo "HF_BRANCH=$hf_branch" >> $GITHUB_ENV
           echo "MINOR_BRANCH=$minor_branch" >> $GITHUB_ENV
+
+      - name: Debug Branch Names
+        run: |
+          echo "HF Branch: ${{ env.HF_BRANCH }}"
+          echo "Minor Branch: ${{ env.MINOR_BRANCH }}"
 
       - name: Attempt to merge HF into minor
         if: github.ref == 'refs/heads/HF'
