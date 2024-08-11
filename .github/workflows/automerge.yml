@@ -25,8 +25,8 @@ jobs:
         run: |
           git fetch --all
 
-          hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
-          minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
+          hf_branch=$(git branch -r | grep 'profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
+          minor_branch=$(git branch -r | grep 'profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
 
           echo "HF branch: $hf_branch"
           echo "Minor branch: $minor_branch"
@@ -45,7 +45,7 @@ jobs:
         run: |
           git fetch origin
           git checkout ${{ env.MINOR_BRANCH }}
-          git merge origin/${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
+          git merge ${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin ${{ env.MINOR_BRANCH }}
 
       - name: Handle conflict between HF and minor
@@ -64,7 +64,7 @@ jobs:
         run: |
           git fetch origin
           git checkout master
-          git merge origin/${{ env.MINOR_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
+          git merge ${{ env.MINOR_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
           git push origin master
 
       - name: Handle conflict between minor and master
