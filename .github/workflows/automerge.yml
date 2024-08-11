@@ -1,0 +1,81 @@
+name: Sync branches with conflict handling
+
+on: 
+  push:
+    branches:
+      - HF
+      - minor
+
+jobs: 
+  branch-sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up git
+        run: |
+          git config --global user.name 'egangithub1502'
+          git config --global user.email '2010177071b@gmail.com'
+
+      - name: Attempt to merge HF into minor
+        if: github.ref == 'refs/heads/HF'
+        id: merge_hf_to_minor
+        run: |
+          git fetch origin
+          git checkout minor
+          git merge --no-commit --no-ff origin/HF || true
+          echo "Merge HF into minor completed with exit code $?"
+          if [ $? -ne 0 ]; then
+            echo "Merge conflict detected."
+            exit 1
+          fi
+          git commit -m "Merge HF into minor"
+          git push origin minor
+
+      - name: Debug after HF to minor merge
+        if: github.ref == 'refs/heads/HF'
+        run: |
+          git status
+          git log --oneline -n 10
+          git diff --name-status HEAD^
+          git branch -a
+
+      - name: Handle conflict between HF and minor
+        if: failure() && github.ref == 'refs/heads/HF'
+        run: |
+          git checkout -b temp/hf-to-minor-conflict
+          git push origin temp/hf-to-minor-conflict
+          echo "Conflict branch created: temp/hf-to-minor-conflict"
+
+      - name: Attempt to merge minor into master
+        if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
+        id: merge_minor_to_master
+        run: |
+          git fetch origin
+          git checkout master
+          git merge --no-commit --no-ff origin/minor || true
+          echo "Merge minor into master completed with exit code $?"
+          if [ $? -ne 0 ]; then
+            echo "Merge conflict detected."
+            exit 1
+          fi
+          git commit -m "Merge minor into master"
+          git push origin master
+
+      - name: Debug after minor to master merge
+        if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
+        run: |
+          git status
+          git log --oneline -n 10
+          git diff --name-status HEAD^
+          git branch -a
+
+      - name: Handle conflict between minor and master
+        if: failure() && (github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success()))
+        run: |
+          git checkout -b temp/minor-to-master-conflict
+          git push origin temp/minor-to-master-conflict
+          echo "Conflict branch created: temp/minor-to-master-conflict"
