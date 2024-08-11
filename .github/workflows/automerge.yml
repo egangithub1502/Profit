@@ -1,12 +1,12 @@
 name: Sync branches with conflict handling
 
-on:
+on: 
   push:
     branches:
-      - profit_dep_hf_*
-      - profit_dep_minor_*
+      - HF
+      - minor
 
-jobs:
+jobs: 
   branch-sync:
     runs-on: ubuntu-latest
     steps:
@@ -19,42 +19,16 @@ jobs:
         run: |
           git config --global user.name 'egangithub1502'
           git config --global user.email '2010177071b@gmail.com'
-
-      - name: Fetch and Identify Latest Branches
-        id: fetch_branches
-        run: |
-          git fetch --all
-
-          hf_branch=$(git branch -r | grep 'profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1)
-          minor_branch=$(git branch -r | grep 'profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1)
-
-          echo "HF branch: $hf_branch"
-          echo "Minor branch: $minor_branch"
-
-          echo "HF_BRANCH=$hf_branch" >> $GITHUB_ENV
-          echo "MINOR_BRANCH=$minor_branch" >> $GITHUB_ENV
-
-      - name: Debug Branch Names
-        run: |
-          echo "HF Branch: ${{ env.HF_BRANCH }}"
-          echo "Minor Branch: ${{ env.MINOR_BRANCH }}"
-
-      - name: List all branches
-        run: |
-          git branch -r
-
       - name: Attempt to merge HF into minor
-        if: contains(env.HF_BRANCH, 'profit_dep_hf_') && contains(env.MINOR_BRANCH, 'profit_dep_minor_')
+        if: github.ref == 'refs/heads/HF'
         id: merge_hf_to_minor
         run: |
           git fetch origin
-          git checkout ${{ env.MINOR_BRANCH }}
-          git fetch origin ${{ env.HF_BRANCH }}
-          git merge ${{ env.HF_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
-          git push origin ${{ env.MINOR_BRANCH }}
-
+          git checkout minor
+          git merge origin/HF || echo "Merge conflict detected" && exit 1
+          git push origin minor
       - name: Handle conflict between HF and minor
-        if: failure() && contains(env.HF_BRANCH, 'profit_dep_hf_')
+        if: failure() && github.ref == 'refs/heads/HF'
         run: |
           git checkout -b temp/hf-to-minor-conflict
           git push origin temp/hf-to-minor-conflict
@@ -62,18 +36,16 @@ jobs:
           curl -X POST -H 'Content-Type: application/json' -d '{
             "text": "Merge conflict detected while merging HF into minor. A temporary branch (temp/hf-to-minor-conflict) has been created for manual resolution. Conflicting files:\n\n'$(git diff --name-only HEAD^1 HEAD)'"
           }' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
-
       - name: Attempt to merge minor into master
-        if: contains(env.MINOR_BRANCH, 'profit_dep_minor_') || (contains(env.HF_BRANCH, 'profit_dep_hf_') && success())
+        if: github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success())
         id: merge_minor_to_master
         run: |
           git fetch origin
           git checkout master
-          git merge ${{ env.MINOR_BRANCH }} || { echo "Merge conflict detected"; exit 1; }
+          git merge origin/minor || echo "Merge conflict detected" && exit 1
           git push origin master
-
       - name: Handle conflict between minor and master
-        if: failure() && (contains(env.MINOR_BRANCH, 'profit_dep_minor_') || (contains(env.HF_BRANCH, 'profit_dep_hf_') && success()))
+        if: failure() && (github.ref == 'refs/heads/minor' || (github.ref == 'refs/heads/HF' && success()))
         run: |
           git checkout -b temp/minor-to-master-conflict
           git push origin temp/minor-to-master-conflict
