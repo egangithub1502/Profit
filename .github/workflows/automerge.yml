@@ -19,7 +19,6 @@ jobs:
         run: |
           git config --global user.name 'egangithub1502'
           git config --global user.email '2010177071b@gmail.com'
-
       - name: Check if direct commit to master
         id: check_direct_commit
         run: |
@@ -31,7 +30,6 @@ jobs:
           else
             echo "DIRECT_COMMIT=false" >> $GITHUB_ENV
           fi
-
       - name: Notify Google Chat on Direct Commit
         if: env.DIRECT_COMMIT == 'true'
         run: |
@@ -131,12 +129,10 @@ jobs:
             git commit -m "Merge $latest_minor_branch into master"
             git push origin master
           fi
-
       - name: Notify Google Chat on Success
         if: success()
         run: |
           curl -X POST -H 'Content-Type: application/json' --data '{"text": "Sync branches job succeeded."}' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
-
       - name: Notify Google Chat on Failure
         if: failure()
         run: |
