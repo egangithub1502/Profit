@@ -76,16 +76,9 @@ jobs:
               echo "Merge conflict detected."
               conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              temp_branch="temp/hf-to-minor-conflict"
-              
-              # Create and push temporary branch
-              git checkout -b "$temp_branch"
-              git add -A
-              git commit -m "Temporary commit to handle merge conflict"
-              git push origin "$temp_branch"
               
               # Notify about the conflict
-              message="Merge conflict detected when merging HF into minor.\nConflicting files:\n$conflict_files\nLast committer: $committer\nTemporary branch created: $temp_branch"
+              message="Merge conflict detected when merging HF into minor.\nConflicting files:\n$conflict_files\nLast committer: $committer"
               curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               
               exit 1
@@ -101,16 +94,9 @@ jobs:
               echo "Merge conflict detected."
               conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              temp_branch="temp/minor-to-master-conflict"
-              
-              # Create and push temporary branch
-              git checkout -b "$temp_branch"
-              git add -A
-              git commit -m "Temporary commit to handle merge conflict"
-              git push origin "$temp_branch"
               
               # Notify about the conflict
-              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer\nTemporary branch created: $temp_branch"
+              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer"
               curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               
               exit 1
@@ -132,16 +118,9 @@ jobs:
               echo "Merge conflict detected."
               conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
               committer=$(git log -1 --pretty=format:'%an')
-              temp_branch="temp/minor-to-master-conflict"
-              
-              # Create and push temporary branch
-              git checkout -b "$temp_branch"
-              git add -A
-              git commit -m "Temporary commit to handle merge conflict"
-              git push origin "$temp_branch"
               
               # Notify about the conflict
-              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer\nTemporary branch created: $temp_branch"
+              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer"
               curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
               
               exit 1
