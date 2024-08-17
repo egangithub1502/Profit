@@ -1,141 +1,154 @@
-name: Sync branches with conflict handling
+name: Automate HF to Minor to Master Merge
 
 on:
   push:
     branches:
-      - '*'
+      - 'profit_dep_hf_*'
 
 jobs:
-  branch-sync:
-    runs-on: ubuntu-latest
+  create_pr_hf_to_minor:
+    runs-on: ubuntu-latest  # Use GitHub-hosted Ubuntu runner
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        uses: actions/checkout@v3
 
-      - name: Set up git
+      - name: Install GitHub CLI
         run: |
-          # Extract the commit author and email from the GitHub environment
-          COMMITTER_NAME=$(git log -1 --pretty=format:'%an')
-          COMMITTER_EMAIL=$(git log -1 --pretty=format:'%ae')
-          
-          # Configure git with the committer's details
-          git config --global user.name "$COMMITTER_NAME"
-          git config --global user.email "$COMMITTER_EMAIL"
-          
-          echo "Configured git with user.name=$COMMITTER_NAME and user.email=$COMMITTER_EMAIL"
+          if ! command -v gh &> /dev/null; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install gh -y
+          fi
 
-      - name: Check if direct commit to master
-        id: check_direct_commit
+      - name: Authenticate GitHub CLI
         run: |
-          branch_name="${GITHUB_REF#refs/heads/}"
-          
-          if [ "$branch_name" == "master" ]; then
-            echo "Direct commit to master detected."
-            echo "DIRECT_COMMIT=true" >> $GITHUB_ENV
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: List Remote Branches
+        run: |
+          git fetch --all
+          git branch -r
+
+      - name: Determine Latest Minor Branch
+        id: get_minor_branch
+        run: |
+          git fetch --all
+          latest_minor_branch=$(git branch -r | grep "origin/profit_dep_minor_" | sort -V | tail -n 1 | sed 's|origin/||')
+          echo "Latest Minor Branch: $latest_minor_branch"
+          echo "latest_minor_branch=$latest_minor_branch" >> $GITHUB_ENV
+
+      - name: Verify Latest Minor Branch
+        run: |
+          git fetch origin ${{ env.latest_minor_branch }}
+          if git rev-parse --verify origin/${{ env.latest_minor_branch }} >/dev/null 2>&1; then
+            echo "Latest minor branch reference is valid."
           else
-            echo "DIRECT_COMMIT=false" >> $GITHUB_ENV
+            echo "Latest minor branch reference is invalid."
+            exit 1
           fi
 
-      - name: Sync branches
-        if: env.DIRECT_COMMIT == 'false'
+      - name: Create Pull Request HF to Minor
+        id: create_pr_hf_to_minor
         run: |
-          # Extract branch name from the reference
-          branch_name="${GITHUB_REF#refs/heads/}"
-          
-          # Determine if this is an HF or minor branch
-          case "$branch_name" in
-            profit_dep_hf_*)
-              BRANCH_TYPE="hf"
-              ;;
-            profit_dep_minor_*)
-              BRANCH_TYPE="minor"
-              ;;
-            *)
-              BRANCH_TYPE="none"
-              ;;
-          esac
-          
-          echo "Branch Type: $BRANCH_TYPE"
-          
-          if [ "$BRANCH_TYPE" == "hf" ]; then
-            # Get the latest HF branch
-            latest_hf_branch=$(git branch -r | grep 'origin/profit_dep_hf_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
-            echo "Latest HF branch: $latest_hf_branch"
-            
-            # Get the latest minor branch
-            latest_minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
-            echo "Latest minor branch: $latest_minor_branch"
-            
-            # Merge HF into minor
-            git fetch origin
-            git checkout "$latest_minor_branch"
-            git merge --no-commit --no-ff "origin/$latest_hf_branch" || true
-            if git ls-files -u | grep -q .; then
-              echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
-              committer=$(git log -1 --pretty=format:'%an')
-              
-              # Notify about the conflict
-              message="Merge conflict detected when merging HF into minor.\nConflicting files:\n$conflict_files\nLast committer: $committer"
-              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
-              
-              exit 1
-            fi
-            git commit -m "Merge $latest_hf_branch into $latest_minor_branch"
-            git push origin "$latest_minor_branch"
-            
-            # Attempt to merge minor into master
-            git fetch origin
-            git checkout master
-            git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
-            if git ls-files -u | grep -q .; then
-              echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
-              committer=$(git log -1 --pretty=format:'%an')
-              
-              # Notify about the conflict
-              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer"
-              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
-              
-              exit 1
-            fi
-            git commit -m "Merge $latest_minor_branch into master"
-            git push origin master
-          elif [ "$BRANCH_TYPE" == "minor" ]; then
-            echo "Processing minor branch only."
-            
-            # Get the latest minor branch
-            latest_minor_branch=$(git branch -r | grep 'origin/profit_dep_minor_' | sed 's/origin\///' | sort -r | head -n 1 | xargs)
-            echo "Latest minor branch: $latest_minor_branch"
-            
-            # Attempt to merge minor into master
-            git fetch origin
-            git checkout master
-            git merge --no-commit --no-ff "origin/$latest_minor_branch" || true
-            if git ls-files -u | grep -q .; then
-              echo "Merge conflict detected."
-              conflict_files=$(git diff --name-only --diff-filter=U | awk '{print " - " $0}' | tr '\n' '\n')
-              committer=$(git log -1 --pretty=format:'%an')
-              
-              # Notify about the conflict
-              message="Merge conflict detected when merging minor into master.\nConflicting files:\n$conflict_files\nLast committer: $committer"
-              curl -X POST -H 'Content-Type: application/json' --data "{\"text\": \"$message\"}" ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
-              
-              exit 1
-            fi
-            git commit -m "Merge $latest_minor_branch into master"
-            git push origin master
+          if [ -z "${{ env.latest_minor_branch }}" ]; then
+            echo "No minor branch found. Exiting."
+            exit 1
           fi
 
-      - name: Notify Google Chat on Success
-        if: success()
-        run: |
-          curl -X POST -H 'Content-Type: application/json' --data '{"text": "Sync branches job succeeded."}' ${{ secrets.GOOGLE_CHAT_WEBHOOK_URL }}
+          # Fetch branches and check for commits
+          git fetch origin ${{ github.ref_name }}
+          git fetch origin ${{ env.latest_minor_branch }}
 
-      - name: Notify Google Chat on Failure
-        if: failure()
+          # Check for differences between branches
+          echo "HEAD: $(git rev-parse HEAD)"
+          echo "Latest Minor Branch: ${{ env.latest_minor_branch }}"
+
+          commits_count=$(git rev-list --count HEAD..origin/${{ env.latest_minor_branch }})
+
+          if [ "$commits_count" -eq 0 ]; then
+            echo "No commits between ${{ github.ref_name }} and ${{ env.latest_minor_branch }}. Exiting."
+            exit 1
+          fi
+
+          pr_output=$(gh pr create --base "${{ env.latest_minor_branch }}" --head "${{ github.ref_name }}" --title "Merge HF to Minor" --body "Automated PR for merging HF to Minor branch.")
+          echo "$pr_output"
+          pr_url=$(echo "$pr_output" | grep -o 'https://github.com/[^ ]*' | head -n 1)
+          echo "PR URL: $pr_url"
+          echo "pr_url=$pr_url" >> $GITHUB_ENV
+
+          # Notify Google Chat with the PR URL
+          curl -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\": \"PR created to merge HF to Minor: '${{ github.ref_name }}' into '${{ env.latest_minor_branch }}'. PR URL: $pr_url\"}" \
+            'https://chat.googleapis.com/v1/spaces/AAAAiN5o6yI/messages?key=<API_KEY>&token=<TOKEN>'
+
+  merge_pr_hf_to_minor:
+    needs: create_pr_hf_to_minor
+    runs-on: ubuntu-latest  # Use GitHub-hosted Ubuntu runner
+    steps:
+      - name: Install GitHub CLI
         run: |
-          # The detailed conflict message is sent above, so this step is no longer necessary
-          echo "Failure notification is not needed; detailed conflict messages are already sent."
+          if ! command -v gh &> /dev/null; then
+            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
+            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
+            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
+            sudo apt-get update
+            sudo apt-get install gh -y
+          fi
+
+      - name: Authenticate GitHub CLI
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+
+      - name: Wait for Approval and Merge
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr_number = process.env.PR_NUMBER;
+            const { data: pr } = await github.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr_number
+            });
+            if (pr.state === 'open' && pr.mergeable) {
+              await github.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr_number
+              });
+            }
+
+      - name: Create PR Minor to Master
+        id: create_pr_minor_to_master
+        run: |
+          if [ -z "${{ env.latest_minor_branch }}" ]; then
+            echo "No minor branch found. Exiting."
+            exit 1
+          fi
+
+          # Fetch branches and check for commits
+          git fetch origin ${{ env.latest_minor_branch }}
+          git fetch origin master
+
+          # Check for differences between branches
+          echo "HEAD: $(git rev-parse HEAD)"
+          echo "Master Branch: master"
+
+          commits_count=$(git rev-list --count HEAD..origin/master)
+
+          if [ "$commits_count" -eq 0 ]; then
+            echo "No commits between ${{ env.latest_minor_branch }} and master. Exiting."
+            exit 1
+          fi
+
+          pr_output=$(gh pr create --base master --head "${{ env.latest_minor_branch }}" --title "Merge Minor to Master" --body "Automated PR for merging Minor to Master branch.")
+          echo "$pr_output"
+          pr_url=$(echo "$pr_output" | grep -o 'https://github.com/[^ ]*' | head -n 1)
+          echo "PR URL: $pr_url"
+          echo "pr_url=$pr_url" >> $GITHUB_ENV
+
+          # Notify Google Chat with the PR URL
+          curl -X POST -H 'Content-Type: application/json' \
+            --data "{\"text\": \"PR created to merge Minor to Master: '${{ env.latest_minor_branch }}' into master. PR URL: $pr_url\"}" \
+            'https://chat.googleapis.com/v1/spaces/AAAAiN5o6yI/messages?key=<API_KEY>&token=<TOKEN>'
