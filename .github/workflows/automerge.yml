@@ -21,13 +21,20 @@ jobs:
       - name: Fetch All Remote Branches
         run: |
           git fetch --all
+          git branch -r
 
       - name: Verify Branch Existence
         id: check_branch
         run: |
           BRANCH_NAME="profit_dep_minor_09092024"
-          REMOTE_BRANCH_EXISTS=$(git branch -r | grep -q "origin/$BRANCH_NAME" && echo "true" || echo "false")
-          echo "REMOTE_BRANCH_EXISTS=$REMOTE_BRANCH_EXISTS" >> $GITHUB_ENV
+          echo "Checking for branch '$BRANCH_NAME' in remote branches..."
+          if git branch -r | grep -q "origin/$BRANCH_NAME"; then
+            echo "Branch 'origin/$BRANCH_NAME' exists remotely."
+            echo "REMOTE_BRANCH_EXISTS=true" >> $GITHUB_ENV
+          else
+            echo "Branch 'origin/$BRANCH_NAME' does not exist remotely."
+            echo "REMOTE_BRANCH_EXISTS=false" >> $GITHUB_ENV
+          fi
 
       - name: Check Out Branch If It Exists
         if: env.REMOTE_BRANCH_EXISTS == 'true'
