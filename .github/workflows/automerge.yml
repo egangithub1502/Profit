@@ -1,48 +1,47 @@
-name: Auto Merge Branches
+name: Resolve Branch Issues
 
 on:
+  workflow_dispatch:
   push:
     branches:
       - 'profit_dep_hf_*'
       - 'profit_dep_minor_*'
 
 jobs:
-  merge-branches:
+  resolve-branch-issue:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
+
       - name: Set Up Git
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-      - name: Determine Target Branch
-        id: determine-target
+
+      - name: Fetch All Remote Branches
         run: |
-          branch_name=${GITHUB_REF#refs/heads/}
-          if [[ $branch_name == profit_dep_hf_* ]]; then
-            target_branch="profit_dep_minor_${branch_name#profit_dep_hf_}"
-          elif [[ $branch_name == profit_dep_minor_* ]]; then
-            target_branch="master"
+          git fetch --all
+
+      - name: Verify Branch Existence
+        id: check_branch
+        run: |
+          BRANCH_NAME="profit_dep_minor_09092024"
+          REMOTE_BRANCH_EXISTS=$(git branch -r | grep -q "origin/$BRANCH_NAME" && echo "true" || echo "false")
+          echo "REMOTE_BRANCH_EXISTS=$REMOTE_BRANCH_EXISTS" >> $GITHUB_ENV
+
+      - name: Check Out Branch If It Exists
+        if: env.REMOTE_BRANCH_EXISTS == 'true'
+        run: |
+          BRANCH_NAME="profit_dep_minor_09092024"
+          if git show-ref --verify --quiet refs/heads/$BRANCH_NAME; then
+            echo "Branch '$BRANCH_NAME' is already checked out locally."
           else
-            echo "No matching target branch found."
-            exit 1
+            echo "Checking out branch '$BRANCH_NAME' from remote..."
+            git checkout -b $BRANCH_NAME origin/$BRANCH_NAME
           fi
-          echo "TARGET_BRANCH=$target_branch" >> $GITHUB_ENV
-          echo "SOURCE_BRANCH=$branch_name" >> $GITHUB_ENV
-      - name: Check Branch Status
-        id: check-status
+
+      - name: Handle Branch Not Found
+        if: env.REMOTE_BRANCH_EXISTS == 'false'
         run: |
-          git fetch origin
-          source_commit=$(git rev-parse origin/${{ env.SOURCE_BRANCH }})
-          target_commit=$(git rev-parse origin/${{ env.TARGET_BRANCH }})
-          if [ "$source_commit" = "$target_commit" ]; then
-            echo "Branches are up-to-date. No pull request needed."
-            exit 0
-          fi
-      - name: Create Pull Request
-        if: success()
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "Creating PR to merge ${{ env.SOURCE_BRANCH }} into ${{ env.TARGET_BRANCH }}"
-          gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SOURCE_BRANCH }} --title "Merge ${{ env.SOURCE_BRANCH }} into ${{ env.TARGET_BRANCH }}" --body "Automated PR to merge ${{ env.SOURCE_BRANCH }} into ${{ env.TARGET_BRANCH }}"
+          echo "Branch 'profit_dep_minor_09092024' does not exist remotely."
+          exit 1
