@@ -1,4 +1,4 @@
-name: Auto Merge Branches with Date Differences
+name: Auto Merge HF to Minor Branches
 
 on:
   workflow_dispatch:
@@ -29,10 +29,10 @@ jobs:
         run: |
           # Fetch list of remote branches
           REMOTE_BRANCHES=$(git branch -r)
-          
+
           # Find the latest HF branch
           LATEST_HF_BRANCH=$(echo "$REMOTE_BRANCHES" | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's/origin\///')
-          
+
           # Extract date suffix from HF branch
           DATE_SUFFIX=${LATEST_HF_BRANCH#profit_dep_hf_}
           
