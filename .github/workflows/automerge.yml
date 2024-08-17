@@ -15,20 +15,34 @@ jobs:
         run: |
           git config --global user.name "github-actions"
           git config --global user.email "github-actions@github.com"
-      - name: Create Pull Request for HF to Minor
-        if: startsWith(github.ref, 'refs/heads/profit_dep_hf_')
+      - name: Determine Target Branch
+        id: determine-target
+        run: |
+          branch_name=${GITHUB_REF#refs/heads/}
+          if [[ $branch_name == profit_dep_hf_* ]]; then
+            target_branch="profit_dep_minor_${branch_name#profit_dep_hf_}"
+          elif [[ $branch_name == profit_dep_minor_* ]]; then
+            target_branch="master"
+          else
+            echo "No matching target branch found."
+            exit 1
+          fi
+          echo "TARGET_BRANCH=$target_branch" >> $GITHUB_ENV
+          echo "SOURCE_BRANCH=$branch_name" >> $GITHUB_ENV
+      - name: Check Branch Status
+        id: check-status
+        run: |
+          git fetch origin
+          source_commit=$(git rev-parse origin/${{ env.SOURCE_BRANCH }})
+          target_commit=$(git rev-parse origin/${{ env.TARGET_BRANCH }})
+          if [ "$source_commit" = "$target_commit" ]; then
+            echo "Branches are up-to-date. No pull request needed."
+            exit 0
+          fi
+      - name: Create Pull Request
+        if: success()
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          branch_name=${GITHUB_REF#refs/heads/}
-          minor_branch="profit_dep_minor_${branch_name#profit_dep_hf_}"
-          echo "Creating PR to merge $branch_name into $minor_branch"
-          gh pr create --base $minor_branch --head $branch_name --title "Merge $branch_name into $minor_branch" --body "Automated PR to merge $branch_name into $minor_branch"
-      - name: Create Pull Request for Minor to Master
-        if: startsWith(github.ref, 'refs/heads/profit_dep_minor_')
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          branch_name=${GITHUB_REF#refs/heads/}
-          echo "Creating PR to merge $branch_name into master"
-          gh pr create --base master --head $branch_name --title "Merge $branch_name into master" --body "Automated PR to merge $branch_name into master"
+          echo "Creating PR to merge ${{ env.SOURCE_BRANCH }} into ${{ env.TARGET_BRANCH }}"
+          gh pr create --base ${{ env.TARGET_BRANCH }} --head ${{ env.SOURCE_BRANCH }} --title "Merge ${{ env.SOURCE_BRANCH }} into ${{ env.TARGET_BRANCH }}" --body "Automated PR to merge ${{ env.SOURCE_BRANCH }} into ${{ env.TARGET_BRANCH }}"
