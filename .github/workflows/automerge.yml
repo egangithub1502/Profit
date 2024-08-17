@@ -1,4 +1,4 @@
-name: Auto Merge HF to Minor Branches
+name: Auto Merge Latest HF to Minor Branches
 
 on:
   workflow_dispatch:
@@ -24,20 +24,17 @@ jobs:
           echo "Remote branches:"
           git branch -r
 
-      - name: Determine Latest HF and Corresponding Minor Branch
+      - name: Determine Latest HF and Minor Branches
         id: determine-branches
         run: |
           # Fetch list of remote branches
           REMOTE_BRANCHES=$(git branch -r)
-
+          
           # Find the latest HF branch
           LATEST_HF_BRANCH=$(echo "$REMOTE_BRANCHES" | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's/origin\///')
-
-          # Extract date suffix from HF branch
-          DATE_SUFFIX=${LATEST_HF_BRANCH#profit_dep_hf_}
           
-          # Find corresponding Minor branch
-          LATEST_MINOR_BRANCH="profit_dep_minor_$DATE_SUFFIX"
+          # Find the latest Minor branch
+          LATEST_MINOR_BRANCH=$(echo "$REMOTE_BRANCHES" | grep 'origin/profit_dep_minor_' | sort -V | tail -n 1 | sed 's/origin\///')
 
           echo "LATEST_HF_BRANCH=$LATEST_HF_BRANCH" >> $GITHUB_ENV
           echo "LATEST_MINOR_BRANCH=$LATEST_MINOR_BRANCH" >> $GITHUB_ENV
@@ -62,7 +59,7 @@ jobs:
           
           echo "BRANCH_EXISTS=$BRANCH_EXISTS" >> $GITHUB_ENV
 
-      - name: Create Pull Request for HF to Minor
+      - name: Create Pull Request for Latest HF to Minor
         if: env.BRANCH_EXISTS == 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
