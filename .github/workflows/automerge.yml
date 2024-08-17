@@ -1,4 +1,4 @@
-name: Resolve Branch Issues
+name: Auto Merge Branches with Date Differences
 
 on:
   workflow_dispatch:
@@ -8,7 +8,7 @@ on:
       - 'profit_dep_minor_*'
 
 jobs:
-  resolve-branch-issue:
+  merge-branches:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -21,34 +21,57 @@ jobs:
       - name: Fetch All Remote Branches
         run: |
           git fetch --all
+          echo "Remote branches:"
           git branch -r
 
+      - name: Determine Latest HF and Corresponding Minor Branch
+        id: determine-branches
+        run: |
+          # Fetch list of remote branches
+          REMOTE_BRANCHES=$(git branch -r)
+          
+          # Find the latest HF branch
+          LATEST_HF_BRANCH=$(echo "$REMOTE_BRANCHES" | grep 'origin/profit_dep_hf_' | sort -V | tail -n 1 | sed 's/origin\///')
+          
+          # Extract date suffix from HF branch
+          DATE_SUFFIX=${LATEST_HF_BRANCH#profit_dep_hf_}
+          
+          # Find corresponding Minor branch
+          LATEST_MINOR_BRANCH="profit_dep_minor_$DATE_SUFFIX"
+
+          echo "LATEST_HF_BRANCH=$LATEST_HF_BRANCH" >> $GITHUB_ENV
+          echo "LATEST_MINOR_BRANCH=$LATEST_MINOR_BRANCH" >> $GITHUB_ENV
+
       - name: Verify Branch Existence
-        id: check_branch
+        id: check-branches
         run: |
-          BRANCH_NAME="profit_dep_minor_09092024"
-          echo "Checking for branch '$BRANCH_NAME' in remote branches..."
-          if git branch -r | grep -q "origin/$BRANCH_NAME"; then
-            echo "Branch 'origin/$BRANCH_NAME' exists remotely."
-            echo "REMOTE_BRANCH_EXISTS=true" >> $GITHUB_ENV
+          BRANCH_EXISTS=true
+          if [[ -z "${{ env.LATEST_HF_BRANCH }}" || -z "${{ env.LATEST_MINOR_BRANCH }}" ]]; then
+            echo "One or both branches do not exist."
+            BRANCH_EXISTS=false
           else
-            echo "Branch 'origin/$BRANCH_NAME' does not exist remotely."
-            echo "REMOTE_BRANCH_EXISTS=false" >> $GITHUB_ENV
+            if ! git branch -r | grep -q "origin/${{ env.LATEST_HF_BRANCH }}"; then
+              echo "HF branch '${{ env.LATEST_HF_BRANCH }}' does not exist."
+              BRANCH_EXISTS=false
+            fi
+            if ! git branch -r | grep -q "origin/${{ env.LATEST_MINOR_BRANCH }}"; then
+              echo "Minor branch '${{ env.LATEST_MINOR_BRANCH }}' does not exist."
+              BRANCH_EXISTS=false
+            fi
           fi
+          
+          echo "BRANCH_EXISTS=$BRANCH_EXISTS" >> $GITHUB_ENV
 
-      - name: Check Out Branch If It Exists
-        if: env.REMOTE_BRANCH_EXISTS == 'true'
+      - name: Create Pull Request for HF to Minor
+        if: env.BRANCH_EXISTS == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          BRANCH_NAME="profit_dep_minor_09092024"
-          if git show-ref --verify --quiet refs/heads/$BRANCH_NAME; then
-            echo "Branch '$BRANCH_NAME' is already checked out locally."
-          else
-            echo "Checking out branch '$BRANCH_NAME' from remote..."
-            git checkout -b $BRANCH_NAME origin/$BRANCH_NAME
-          fi
+          echo "Creating PR to merge ${{ env.LATEST_HF_BRANCH }} into ${{ env.LATEST_MINOR_BRANCH }}"
+          gh pr create --base ${{ env.LATEST_MINOR_BRANCH }} --head ${{ env.LATEST_HF_BRANCH }} --title "Merge ${{ env.LATEST_HF_BRANCH }} into ${{ env.LATEST_MINOR_BRANCH }}" --body "Automated PR to merge ${{ env.LATEST_HF_BRANCH }} into ${{ env.LATEST_MINOR_BRANCH }}"
 
-      - name: Handle Branch Not Found
-        if: env.REMOTE_BRANCH_EXISTS == 'false'
+      - name: Handle Missing Branches
+        if: env.BRANCH_EXISTS == 'false'
         run: |
-          echo "Branch 'profit_dep_minor_09092024' does not exist remotely."
+          echo "Required branches are missing or not found."
           exit 1
