@@ -1,154 +1,34 @@
-name: Automate HF to Minor to Master Merge
+name: Auto Merge Branches
 
 on:
   push:
     branches:
       - 'profit_dep_hf_*'
+      - 'profit_dep_minor_*'
 
 jobs:
-  create_pr_hf_to_minor:
-    runs-on: ubuntu-latest  # Use GitHub-hosted Ubuntu runner
+  merge-branches:
+    runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Install GitHub CLI
+      - uses: actions/checkout@v2
+      - name: Set Up Git
         run: |
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update
-            sudo apt-get install gh -y
-          fi
-
-      - name: Authenticate GitHub CLI
+          git config --global user.name "github-actions"
+          git config --global user.email "github-actions@github.com"
+      - name: Create Pull Request for HF to Minor
+        if: startsWith(github.ref, 'refs/heads/profit_dep_hf_')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: List Remote Branches
+          branch_name=${GITHUB_REF#refs/heads/}
+          minor_branch="profit_dep_minor_${branch_name#profit_dep_hf_}"
+          echo "Creating PR to merge $branch_name into $minor_branch"
+          gh pr create --base $minor_branch --head $branch_name --title "Merge $branch_name into $minor_branch" --body "Automated PR to merge $branch_name into $minor_branch"
+      - name: Create Pull Request for Minor to Master
+        if: startsWith(github.ref, 'refs/heads/profit_dep_minor_')
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          git fetch --all
-          git branch -r
-
-      - name: Determine Latest Minor Branch
-        id: get_minor_branch
-        run: |
-          git fetch --all
-          latest_minor_branch=$(git branch -r | grep "origin/profit_dep_minor_" | sort -V | tail -n 1 | sed 's|origin/||')
-          echo "Latest Minor Branch: $latest_minor_branch"
-          echo "latest_minor_branch=$latest_minor_branch" >> $GITHUB_ENV
-
-      - name: Verify Latest Minor Branch
-        run: |
-          git fetch origin ${{ env.latest_minor_branch }}
-          if git rev-parse --verify origin/${{ env.latest_minor_branch }} >/dev/null 2>&1; then
-            echo "Latest minor branch reference is valid."
-          else
-            echo "Latest minor branch reference is invalid."
-            exit 1
-          fi
-
-      - name: Create Pull Request HF to Minor
-        id: create_pr_hf_to_minor
-        run: |
-          if [ -z "${{ env.latest_minor_branch }}" ]; then
-            echo "No minor branch found. Exiting."
-            exit 1
-          fi
-
-          # Fetch branches and check for commits
-          git fetch origin ${{ github.ref_name }}
-          git fetch origin ${{ env.latest_minor_branch }}
-
-          # Check for differences between branches
-          echo "HEAD: $(git rev-parse HEAD)"
-          echo "Latest Minor Branch: ${{ env.latest_minor_branch }}"
-
-          commits_count=$(git rev-list --count HEAD..origin/${{ env.latest_minor_branch }})
-
-          if [ "$commits_count" -eq 0 ]; then
-            echo "No commits between ${{ github.ref_name }} and ${{ env.latest_minor_branch }}. Exiting."
-            exit 1
-          fi
-
-          pr_output=$(gh pr create --base "${{ env.latest_minor_branch }}" --head "${{ github.ref_name }}" --title "Merge HF to Minor" --body "Automated PR for merging HF to Minor branch.")
-          echo "$pr_output"
-          pr_url=$(echo "$pr_output" | grep -o 'https://github.com/[^ ]*' | head -n 1)
-          echo "PR URL: $pr_url"
-          echo "pr_url=$pr_url" >> $GITHUB_ENV
-
-          # Notify Google Chat with the PR URL
-          curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\": \"PR created to merge HF to Minor: '${{ github.ref_name }}' into '${{ env.latest_minor_branch }}'. PR URL: $pr_url\"}" \
-            'https://chat.googleapis.com/v1/spaces/AAAAiN5o6yI/messages?key=<API_KEY>&token=<TOKEN>'
-
-  merge_pr_hf_to_minor:
-    needs: create_pr_hf_to_minor
-    runs-on: ubuntu-latest  # Use GitHub-hosted Ubuntu runner
-    steps:
-      - name: Install GitHub CLI
-        run: |
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update
-            sudo apt-get install gh -y
-          fi
-
-      - name: Authenticate GitHub CLI
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-
-      - name: Wait for Approval and Merge
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const pr_number = process.env.PR_NUMBER;
-            const { data: pr } = await github.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pr_number
-            });
-            if (pr.state === 'open' && pr.mergeable) {
-              await github.pulls.merge({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: pr_number
-              });
-            }
-
-      - name: Create PR Minor to Master
-        id: create_pr_minor_to_master
-        run: |
-          if [ -z "${{ env.latest_minor_branch }}" ]; then
-            echo "No minor branch found. Exiting."
-            exit 1
-          fi
-
-          # Fetch branches and check for commits
-          git fetch origin ${{ env.latest_minor_branch }}
-          git fetch origin master
-
-          # Check for differences between branches
-          echo "HEAD: $(git rev-parse HEAD)"
-          echo "Master Branch: master"
-
-          commits_count=$(git rev-list --count HEAD..origin/master)
-
-          if [ "$commits_count" -eq 0 ]; then
-            echo "No commits between ${{ env.latest_minor_branch }} and master. Exiting."
-            exit 1
-          fi
-
-          pr_output=$(gh pr create --base master --head "${{ env.latest_minor_branch }}" --title "Merge Minor to Master" --body "Automated PR for merging Minor to Master branch.")
-          echo "$pr_output"
-          pr_url=$(echo "$pr_output" | grep -o 'https://github.com/[^ ]*' | head -n 1)
-          echo "PR URL: $pr_url"
-          echo "pr_url=$pr_url" >> $GITHUB_ENV
-
-          # Notify Google Chat with the PR URL
-          curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\": \"PR created to merge Minor to Master: '${{ env.latest_minor_branch }}' into master. PR URL: $pr_url\"}" \
-            'https://chat.googleapis.com/v1/spaces/AAAAiN5o6yI/messages?key=<API_KEY>&token=<TOKEN>'
+          branch_name=${GITHUB_REF#refs/heads/}
+          echo "Creating PR to merge $branch_name into master"
+          gh pr create --base master --head $branch_name --title "Merge $branch_name into master" --body "Automated PR to merge $branch_name into master"
