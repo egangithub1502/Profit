@@ -1,154 +1,134 @@
-name: Automate HF to Minor to Master Merge
+name: Auto Merge
 
 on:
-  push:
-    branches:
-      - 'profit_dep_hf_*'
+  pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - closed
 
 jobs:
-  create_pr_hf_to_minor:
-    runs-on: ubuntu-latest  # Use GitHub-hosted Ubuntu runner
+  check-conflicts:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_state: '${{ steps.check_closed.outputs.pr_state }}'
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Install GitHub CLI
         run: |
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update
-            sudo apt-get install gh -y
-          fi
-
+          sudo apt-get update
+          sudo apt-get install gh
       - name: Authenticate GitHub CLI
-        run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+        run: 'echo "${{ secrets.JEGANTOKEN1 }}" | gh auth login --with-token'
 
-      - name: List Remote Branches
+      - name: Check if pull request is closed
+        id: check_closed
         run: |
-          git fetch --all
-          git branch -r
-
-      - name: Determine Latest Minor Branch
-        id: get_minor_branch
+          pr_number=${{ github.event.pull_request.number }}
+          pr_state=$(gh pr view $pr_number --json state --jq '.state')
+          echo "Initial pull request state: $pr_state"
+          echo "::set-output name=pr_state::$pr_state"
+          if [ "$pr_state" == "closed" ]; then
+            echo "Pull request is closed. Exiting workflow."
+            exit 0
+          fi
+      - name: Check for merge conflicts
+        id: check_conflicts
         run: |
-          git fetch --all
-          latest_minor_branch=$(git branch -r | grep "origin/profit_dep_minor_" | sort -V | tail -n 1 | sed 's|origin/||')
-          echo "Latest Minor Branch: $latest_minor_branch"
-          echo "latest_minor_branch=$latest_minor_branch" >> $GITHUB_ENV
-
-      - name: Verify Latest Minor Branch
-        run: |
-          git fetch origin ${{ env.latest_minor_branch }}
-          if git rev-parse --verify origin/${{ env.latest_minor_branch }} >/dev/null 2>&1; then
-            echo "Latest minor branch reference is valid."
+          pr_number=${{ github.event.pull_request.number }}
+          conflict_status=$(gh pr view $pr_number --json mergeable --jq '.mergeable')
+          echo "Mergeable state: $conflict_status"
+          if [ "$conflict_status" == "CONFLICTING" ]; then
+            echo "Merge conflict detected."
+            gh pr comment $pr_number --body "Your pull request has merge conflicts. Please resolve them before continuing."
+            exit 1
           else
-            echo "Latest minor branch reference is invalid."
-            exit 1
+            echo "No merge conflicts."
+            gh pr comment $pr_number --body "Your pull request has no merge conflicts."
           fi
-
-      - name: Create Pull Request HF to Minor
-        id: create_pr_hf_to_minor
-        run: |
-          if [ -z "${{ env.latest_minor_branch }}" ]; then
-            echo "No minor branch found. Exiting."
-            exit 1
-          fi
-
-          # Fetch branches and check for commits
-          git fetch origin ${{ github.ref_name }}
-          git fetch origin ${{ env.latest_minor_branch }}
-
-          # Check for differences between branches
-          echo "HEAD: $(git rev-parse HEAD)"
-          echo "Latest Minor Branch: ${{ env.latest_minor_branch }}"
-
-          commits_count=$(git rev-list --count HEAD..origin/${{ env.latest_minor_branch }})
-
-          if [ "$commits_count" -eq 0 ]; then
-            echo "No commits between ${{ github.ref_name }} and ${{ env.latest_minor_branch }}. Exiting."
-            exit 1
-          fi
-
-          pr_output=$(gh pr create --base "${{ env.latest_minor_branch }}" --head "${{ github.ref_name }}" --title "Merge HF to Minor" --body "Automated PR for merging HF to Minor branch.")
-          echo "$pr_output"
-          pr_url=$(echo "$pr_output" | grep -o 'https://github.com/[^ ]*' | head -n 1)
-          echo "PR URL: $pr_url"
-          echo "pr_url=$pr_url" >> $GITHUB_ENV
-
-          # Notify Google Chat with the PR URL
-          curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\": \"PR created to merge HF to Minor: '${{ github.ref_name }}' into '${{ env.latest_minor_branch }}'. PR URL: $pr_url\"}" \
-            'https://chat.googleapis.com/v1/spaces/AAAAiN5o6yI/messages?key=<API_KEY>&token=<TOKEN>'
-
-  merge_pr_hf_to_minor:
-    needs: create_pr_hf_to_minor
-    runs-on: ubuntu-latest  # Use GitHub-hosted Ubuntu runner
+  wait_for_approval_and_check_assignment:
+    runs-on: ubuntu-latest
+    needs: check-conflicts
+    if: needs.check-conflicts.outputs.pr_state != 'closed'
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Install GitHub CLI
         run: |
-          if ! command -v gh &> /dev/null; then
-            curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo dd of=/usr/share/keyrings/githubcli-archive-keyring.gpg
-            sudo chmod go+r /usr/share/keyrings/githubcli-archive-keyring.gpg
-            echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null
-            sudo apt-get update
-            sudo apt-get install gh -y
-          fi
-
+          sudo apt-get update
+          sudo apt-get install gh
       - name: Authenticate GitHub CLI
+        run: 'echo "${{ secrets.JEGANTOKEN1 }}" | gh auth login --with-token'
+
+      - name: Wait for pull request approval and check assignment
+        id: wait_for_approval_and_check_assignment
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          pr_number=${{ github.event.pull_request.number }}
+          target_user="egangithub1502"
+          timeout=600  # Time to wait in seconds (10 minutes)
+          interval=10  # Interval between checks in seconds
+          elapsed=0
+          while [ $elapsed -lt $timeout ]; do
+            pr_state=$(gh pr view $pr_number --json state --jq '.state')
+            
+            echo "Pull request state: $pr_state"
+            if [ "$pr_state" == "closed" ]; then
+              echo "Pull request is closed. Exiting workflow."
+              exit 0
+            fi
+            review_status=$(gh pr view $pr_number --json reviews --jq '.reviews[] | select(.state == "APPROVED")' || echo "")
+            assignees=$(gh pr view $pr_number --json assignees --jq '.assignees[].login' || echo "")
+            
+            echo "Review status: $review_status"
+            echo "Assignees: $assignees"
+            if [ -n "$review_status" ] && echo "$assignees" | grep -q "$target_user"; then
+              echo "Pull request has been approved and assigned to $target_user."
+              
+              # Add the comment to the PR
+              comment_body="Code changes self review done\nReviewed API Security - NA\nReviewed API Response Time - NA\nReviewed API Response Size - NA\nReviewed the Technical Design Document - NA\nReviewed the Verification Document - NA\nReviewed Method Level Comments - NA\nReviewed the Test Cases - Y\nOptimized by Copilot - Y\nReviewed byCopilot - Y"
+              gh pr comment $pr_number --body "$comment_body"
+              exit 0
+            fi
+            echo "Waiting for approval and assignment..."
+            sleep $interval
+            elapsed=$((elapsed + interval))
+          done
+          echo "Timeout reached. No approval or incorrect assignment."
+          exit 1
+  merge_pull_request:
+    runs-on: ubuntu-latest
+    needs: wait_for_approval_and_check_assignment
+    if: needs.wait_for_approval_and_check_assignment.outputs.pr_state != 'closed'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
-      - name: Wait for Approval and Merge
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const pr_number = process.env.PR_NUMBER;
-            const { data: pr } = await github.pulls.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: pr_number
-            });
-            if (pr.state === 'open' && pr.mergeable) {
-              await github.pulls.merge({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                pull_number: pr_number
-              });
-            }
-
-      - name: Create PR Minor to Master
-        id: create_pr_minor_to_master
+      - name: Install GitHub CLI
         run: |
-          if [ -z "${{ env.latest_minor_branch }}" ]; then
-            echo "No minor branch found. Exiting."
-            exit 1
+          sudo apt-get update
+          sudo apt-get install gh
+      - name: Authenticate GitHub CLI
+        run: 'echo "${{ secrets.JEGANTOKEN1 }}" | gh auth login --with-token'
+
+      - name: Check if pull request is closed
+        id: check_closed_again
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          pr_state=$(gh pr view $pr_number --json state --jq '.state')
+          echo "Pull request state before merge: $pr_state"
+          if [ "$pr_state" == "closed" ]; then
+            echo "Pull request is closed. Exiting workflow."
+            exit 0
           fi
+      - name: Merge pull request
+        if: success()
+        run: |
+          pr_number=${{ github.event.pull_request.number }}
+          gh pr merge $pr_number --merge --admin
 
-          # Fetch branches and check for commits
-          git fetch origin ${{ env.latest_minor_branch }}
-          git fetch origin master
 
-          # Check for differences between branches
-          echo "HEAD: $(git rev-parse HEAD)"
-          echo "Master Branch: master"
 
-          commits_count=$(git rev-list --count HEAD..origin/master)
-
-          if [ "$commits_count" -eq 0 ]; then
-            echo "No commits between ${{ env.latest_minor_branch }} and master. Exiting."
-            exit 1
-          fi
-
-          pr_output=$(gh pr create --base master --head "${{ env.latest_minor_branch }}" --title "Merge Minor to Master" --body "Automated PR for merging Minor to Master branch.")
-          echo "$pr_output"
-          pr_url=$(echo "$pr_output" | grep -o 'https://github.com/[^ ]*' | head -n 1)
-          echo "PR URL: $pr_url"
-          echo "pr_url=$pr_url" >> $GITHUB_ENV
-
-          # Notify Google Chat with the PR URL
-          curl -X POST -H 'Content-Type: application/json' \
-            --data "{\"text\": \"PR created to merge Minor to Master: '${{ env.latest_minor_branch }}' into master. PR URL: $pr_url\"}" \
-            'https://chat.googleapis.com/v1/spaces/AAAAiN5o6yI/messages?key=<API_KEY>&token=<TOKEN>'
